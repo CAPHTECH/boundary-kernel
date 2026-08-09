@@ -29,6 +29,27 @@
 
 いずれも factor は6種すべてを列挙し(satisfied も省略しない)、`satisfied` 以外の verdict には必ず `reasons` を添えている。digest 類はダミー値(`sha256:<64桁hex>`)。
 
+## TypeScript 参照実装(`src/`)
+
+ランタイム依存ゼロ。devDependencies は `typescript` と `@types/node` のみ。
+
+| ファイル | 役割 |
+|---|---|
+| `src/types.ts` | 3スキーマから導いた型。enum はスキーマと厳密に一致。 |
+| `src/canonical.ts` | canonical JSON(キーを再帰的にソートする決定論的直列化)。 |
+| `src/digest.ts` | Web Crypto (`crypto.subtle`) による SHA-256 digest。Node 22+ / Cloudflare Workers 両対応(async)。 |
+| `src/sha256.ts` | 依存ゼロ・同期の SHA-256。`decide()` が同期純関数のまま `decision_id` を出せるようにするためだけに存在する(Web Crypto 版とバイト一致することをテストで検証)。 |
+| `src/decide.ts` | `decide(policy, request, digests)` — **同期の純関数**。digest は引数で受け取り、crypto に依存しない。 |
+| `src/attribute.ts` | `attribute(prev, next)` — action / evidence / policy のどれが変わったかを切り分ける。複数変化は `unattributable`(推測しない)。 |
+| `src/index.ts` | 公開 API。 |
+
+```bash
+npm install
+npm test     # tsc --noEmit + node:test
+```
+
+テストは fixtures 4件との一致、合成規則の網羅(3^6 全組み合わせ + `human_required` と `incomplete` の同時発生)、digest の決定論性、`attribute()` の単一変化3種と複数変化を検査する。
+
 ## validate.py
 
 `schemas/` と `fixtures/` の整合性を検査するスクリプト。

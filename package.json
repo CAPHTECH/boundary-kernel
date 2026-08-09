@@ -1,0 +1,24 @@
+{
+  "name": "boundary-kernel",
+  "version": "0.1.0",
+  "description": "Review Boundary Kernel (RBK) — deterministic reference implementation of the auto_apply / human_required / incomplete boundary computation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && node --test test/*.test.ts"
+  },
+  "keywords": [
+    "rbk",
+    "boundary",
+    "policy",
+    "governance"
+  ],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
+  }
+}
