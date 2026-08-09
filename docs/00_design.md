@@ -128,6 +128,19 @@ policy_id のみ変化              → policy change
 
 「分離できない比較を単一原因として提示しない」— sdde の規律をそのまま継承する。
 
+### 同一性が縛れていないもの(既知の穴)
+
+`decision_id` の4成分のうち、`action_digest` と `evidence_state_digest` は content hash だが、**`policy_id` と `policy_version` はラベルである**。したがって:
+
+> **同じ `(policy_id, version)` で内容の違う policy は、同じ `decision_id` を生む。** outcome が変わっていても `attribute()` は `no_change` と報告する。
+
+これは v0.2 時点で塞いでいない。policy の content hash を `decision_id` に含めても、ホストが同じ version のまま policy を書き換える限り検出できず、`evidence_state_digest` は policy を含めてはならないという制約も別途残る。したがって現時点の規範は**ホスト側の規律**である:
+
+- **`(policy_id, version)` は不変とする。** 実質的な変更は必ず version を上げる。
+- 上げないなら、その decision の同一性は信頼できない — 唯一の手掛かりは `attribution.outcome_transition` だけになる。
+
+この穴はテスト(`test/identity.test.ts`)で「望ましい形」ではなく「実際の形」のまま固定してある。将来 `identity.policy_digest` を足すかどうかは未決である。
+
 ### 正規化(canonicalization)— v0.2 で追加
 
 digest は言語非依存の契約である。同じ意味の入力が実装ごとに違うハッシュになってはならない。規範は二層に分ける。

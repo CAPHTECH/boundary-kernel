@@ -62,7 +62,7 @@ artifact 非依存です。コードレビューの自動マージ、RAG 評価�
 必要なもの: Node.js 22+(TypeScript を直接実行するため)、Python 3 と `jsonschema`(スキーマ検証のため)。
 
 ```bash
-# TypeScript 参照実装 (tsc --noEmit + node:test, 121 テスト)
+# TypeScript 参照実装 (tsc --noEmit + node:test, 150 テスト)
 npm install
 npm test
 
@@ -82,7 +82,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v2`(JSON Schema Draft 2020-12)。 |
 | `fixtures/` | 5シナリオ。`auto_apply` / 権限の留保 / 証拠の陳腐化による `incomplete` / リスク超過による `human_required` / **`human_required` と基盤欠損の同時成立**。各 `policy.json` + `request.json` + `expected-decision.json`。 |
 | `src/` | TypeScript 参照実装。ランタイム依存ゼロ。`decide()` は**同期の純関数**で、digest は引数で受け取るため crypto に依存しません。 |
-| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、digest の決定論性、変化の帰属。 |
+| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(既知の穴を含む)、digest の決定論性と集合の順序非依存、変化の帰属。 |
 | `experiments/herdr-approvals/` | 実地テスト(下記)。 |
 
 `validate.py` はスキーマだけでは強制できない不変条件も検査します — factor が6種揃っているか、非 `satisfied` に理由があるか、routing 規則が守られているか、`basis_complete` が factor の連言になっているか、二軸の同値(`outcome == incomplete` ⟺ 基盤欠損かつ `human_required` 無し)が成り立つか、`auto_apply` なら留保次元が空か、など。
