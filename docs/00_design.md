@@ -35,11 +35,15 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 **`incomplete` を `human_required` に潰してはならない。** 両者は運用上も意味が違う:
 
 - `human_required` = 制度上・リスク上、人間が決めるべきだと**分かっている**
-- `incomplete` = 本来なら自動適用できたかもしれないが、**それを示せない**
+- `incomplete` = 境界そのものが**計算できなかった**
+
+⚠️ **`incomplete` は「解決すれば auto_apply だった」を意味しない。** 欠けていた観測が埋まった結果 `human_required` になることもある(例: `reversibility: unknown` が `irreversible` と判明する)。意味するのは達成可能性ではなく**計算不能**である。
 
 `incomplete` は「計算基盤の欠損」を可視化する信号であり、これを人間レビューに混ぜると欠損が永久に見えなくなる。reviewgraphen の Gate 三値(`pass`/`blocked`/`incomplete`)、sdde の四状態における `unknown` と同じ規律である。
 
-### 合成規則(単調な狭まり)
+### 二軸に分ける — routing と measurement(v0.2 で訂正)
+
+v0.1 の合成規則は次のとおりだった。
 
 ```
 いずれかの factor が human_required  → human_required
@@ -47,7 +51,34 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 すべて satisfied                     → auto_apply
 ```
 
-確定した制限は不確実性に優先する(人間が要ると分かっているなら、他が不明でも答えは出ている)。結果として **`incomplete` は「自動適用したかったができなかった」場合にのみ現れる** — 最も価値の高い信号だけが残る。
+**これは設計自身の原則を破っていた。** `human_required` と `incomplete` が同時に立ったとき、後者を捨てている。独立レビュー(別モデル系統)がこれを指摘し、実装で確認された([経緯](../../ct-biz/knowledge/products/rbk-critic-findings-2026-08-09.md))。
+
+原因は**2つの異なる問いを1つの値に畳んだこと**である。
+
+| 問い | 軸 | 値 |
+|------|----|----|
+| この行為をどこへ回すか | **routing** | `auto_apply` / `human_required` / `incomplete` |
+| 我々の証拠基盤は十分だったか | **measurement** | `basis_complete: true / false` |
+
+両者は同時に真になれる。「人間が決めるべきで、**かつ**我々の証拠基盤も欠けている」は普通に起きる状態であり、v0.1 はそれを表現できなかった。
+
+**v0.2 の規則**:
+
+```
+routing:
+  いずれかの factor が human_required  → human_required
+  それ以外で incomplete がある          → incomplete
+  すべて satisfied                     → auto_apply
+
+measurement:
+  いずれかの factor が incomplete を1つでも出した → basis_complete = false
+```
+
+`outcome == incomplete` は **`basis_complete == false` かつ `human_required` が無い**場合に一致する。つまり三値の `incomplete` は二軸の特殊ケースであり、**基盤の欠損は outcome に関わらず必ず記録される**。
+
+factor 内でも同じ。1つの factor が `human_required` と `incomplete` の両方の理由を持つとき、verdict は `human_required` だが、**その factor が incomplete 信号を出したことを別に残す**(理由テキストに埋めない)。
+
+権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
 
 権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
 
