@@ -52,10 +52,68 @@
     },
 
     "factors": {
-      "description": "【集合】factor 種別で一意。全 factor を必ず列挙する(6種)。満たされた factor も省略しない(欠損と満足を区別できなくなるため)。正準順は factor enum 順。",
+      "description": "【集合】6種の factor を1回ずつ、必ず全て列挙する。満たされた factor も省略しない(欠損と満足を区別できなくなるため)。この「1回ずつ全て」は下の contains 群と minItems/maxItems で強制する — uniqueItems は object 全体の比較なので、同じ factor 種別が別の verdict で2度現れる場合を弾けない。並べる際の正準順は factor enum 順(digest を取るときの規範であり、順序は集合の意味に関与しないので妥当性の条件にはしない)。",
       "type": "array",
       "minItems": 6,
-      "items": { "$ref": "#/$defs/factorVerdict" }
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/factorVerdict" },
+      "allOf": [
+        {
+          "$comment": "各 factor 種別がちょうど1回ずつ。minItems/maxItems=6 と併せて「6種を1回ずつ、過不足なく」を表現する。",
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "applicability" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "authority" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "evidence" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "freshness" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "risk" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["factor"],
+            "properties": { "factor": { "const": "reversibility" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
     },
 
     "identity": {
@@ -251,6 +309,7 @@
     "agencyDimension": {
       "enum": ["observe", "frame", "project", "judge", "authorize", "execute", "learn"]
     },
+
 
     "factorVerdict": {
       "type": "object",

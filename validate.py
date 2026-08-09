@@ -6,7 +6,10 @@ Checks:
   2. Each fixtures/<name>/{policy,request,expected-decision}.json validates
      against its corresponding schema.
   3. Invariants from docs/00_design.md that the schemas alone do not enforce:
-       (a) factors: all 6 factor kinds present, exactly once each.
+       (a) factors: all 6 factor kinds present, exactly once each (the schema
+           enforces this too since v0.3; the check stays as an independent
+           cross-check, and the schema is separately probed with instances it
+           must reject).
        (b) every factor verdict != satisfied carries a non-empty reasons list.
        (c) routing rule: human_required > incomplete > auto_apply.
        (d) measurement rule: basis_complete is the conjunction of the factors'
@@ -59,6 +62,10 @@ ALL_FACTORS = {
     "risk",
     "reversibility",
 }
+
+# The schema-enforcement probes need one decision that is known valid; any
+# fixture would do, and this one is the simplest.
+FIRST_FIXTURE_FOR_SCHEMA_PROBES = "01-auto-apply"
 
 FAILURES = []
 PASSES = []
@@ -251,6 +258,38 @@ def check_granted_subset_of_requested(label, decision, request):
     return True
 
 
+def check_schema_rejects(label, instance, schema):
+    """The mirror image of check_instance: the schema must *reject* this."""
+    validator = jsonschema.Draft202012Validator(schema)
+    if next(validator.iter_errors(instance), None) is None:
+        fail(label, "the schema accepted an instance it claims to forbid")
+        return False
+    ok(label)
+    return True
+
+
+def check_factors_claim_is_enforced(decision, schema):
+    """The decision schema says factors carries all six kinds, once each. A
+    contract that only says so in a `description` does not say it: until v0.3
+    duplicates and seventh entries validated. These checks confirm the schema
+    itself now rejects them, so the claim and the constraint cannot drift."""
+    factors = decision.get("factors", [])
+    if len(factors) != 6:
+        fail("schema[decision]: factors enforcement", "sample decision does not carry six factors")
+        return
+
+    duplicated = {**decision, "factors": factors[:5] + [dict(factors[0])]}
+    check_schema_rejects(
+        "schema[decision] rejects a duplicated factor kind", duplicated, schema
+    )
+
+    seventh = {**decision, "factors": factors + [dict(factors[0])]}
+    check_schema_rejects("schema[decision] rejects a seventh factor", seventh, schema)
+
+    missing = {**decision, "factors": factors[:5]}
+    check_schema_rejects("schema[decision] rejects a missing factor", missing, schema)
+
+
 def main():
     print("== Validating schemas (Draft 2020-12) ==")
     schemas = {}
@@ -300,6 +339,10 @@ def main():
         check_auto_apply_withheld_empty(f"{name}: auto_apply implies no withheld_dimensions", decision)
         if request is not None:
             check_granted_subset_of_requested(f"{name}: granted_dimensions subset of requested_dimensions", decision, request)
+
+        if name == FIRST_FIXTURE_FOR_SCHEMA_PROBES:
+            print("\n== Probing the decision schema with instances it must reject ==")
+            check_factors_claim_is_enforced(decision, schemas["expected-decision"])
 
     print_report()
     sys.exit(1 if FAILURES else 0)

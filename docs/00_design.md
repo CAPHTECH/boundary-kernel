@@ -216,6 +216,10 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 | `schemas/rbk.request.v1.schema.json` | 行為 + 証拠状態(計算の入力) |
 | `schemas/rbk.decision.v2.schema.json` | routing(三値)+ measurement(`basis_complete`)+ factor 別の根拠 + 同一性 |
 
+**契約は自分の主張を強制する。** `factors` の「6種を1回ずつ、必ず全て」は v0.2 では `description` に書いてあるだけで、重複も7件目も検証を通っていた。強制していない主張は契約ではないので、`minItems`/`maxItems` と factor 種別ごとの `contains`(`minContains`/`maxContains`)で表現し直した。`uniqueItems` は object 全体の比較なので、同じ factor 種別が別の verdict で2度現れる場合を弾けない — ここでは使えない。`validate.py` は、スキーマが拒否すべきインスタンス(重複・7件目・欠落)を実際に投げて拒否を確認する。
+
+配列の**正準順**(factor enum 順など)はスキーマの妥当性条件にしていない。集合の順序は情報を持たないので、順序違いを無効にするのは誤りである。正準順は digest を取る際の規範であり、`normalize.ts` が担う。
+
 `rbk.decision.v1` は撤回した。v1 は routing と measurement を単一の値に畳んでおり、§3 の訂正を表現できない。`basis_complete` を任意フィールドにすれば互換は保てたが、読み手が「無い = 完全」と解釈できてしまい、欠損を見えなくするという同じ失敗を再生産する。したがって必須フィールドとし、破壊的変更として v2 を切った。`rbk.policy.v1` / `rbk.request.v1` は変更していない。
 
 実装は言語非依存(Rust の reviewgraphen、TypeScript の Assay Kit / Cloudflare OS Gadget の双方から使う)。共有するのは**コードではなく契約と語彙**である。

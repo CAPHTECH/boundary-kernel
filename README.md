@@ -68,7 +68,7 @@ artifact 非依存です。コードレビューの自動マージ、RAG 評価�
 npm install
 npm test
 
-# スキーマと fixtures の整合性検査 (58 チェック)
+# スキーマと fixtures の整合性検査 (61 チェック)
 pip install jsonschema
 python3 validate.py
 
@@ -87,7 +87,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(policy を content hash で縛ること)、digest の決定論性と集合の順序非依存、変化の帰属。 |
 | `experiments/herdr-approvals/` | 実地テスト(下記)。 |
 
-`validate.py` はスキーマだけでは強制できない不変条件も検査します — factor が6種揃っているか、非 `satisfied` に理由があるか、routing 規則が守られているか、`basis_complete` が factor の連言になっているか、二軸の同値(`outcome == incomplete` ⟺ 基盤欠損かつ `human_required` 無し)が成り立つか、`auto_apply` なら留保次元が空か、など。
+`validate.py` はスキーマだけでは強制できない不変条件も検査します — 非 `satisfied` に理由があるか、routing 規則が守られているか、`basis_complete` が factor の連言になっているか、二軸の同値(`outcome == incomplete` ⟺ 基盤欠損かつ `human_required` 無し)が成り立つか、`auto_apply` なら留保次元が空か、など。加えて、decision スキーマが**受理してはならない**インスタンス(factor の重複・7件目・欠落)を実際に投げて拒否されることを確認します — 「6種を1回ずつ」は description の主張ではなく制約として書かれています。
 
 ## 実地テスト: 6件中4件で一致
 
