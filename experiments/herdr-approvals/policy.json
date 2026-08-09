@@ -1,0 +1,32 @@
+{
+  "schema": "rbk.policy.v1",
+  "policy_id": "herdr.worker-approval",
+  "version": "0.1.0",
+  "description": "Herdr のワーカーエージェントが要求するシェルコマンドを、オーケストレータが人間を通さず承認してよいかを判定する policy。CAPH TECH の CLAUDE.md『マルチエージェント運用』の承認規約を機械可読にしたもの。",
+  "scope": {
+    "action_kinds": ["shell.command"],
+    "domains": ["worker-pane"]
+  },
+  "authority": {
+    "non_human_may_hold": ["observe", "project", "judge", "execute"],
+    "human_reserved": ["frame", "authorize", "learn"]
+  },
+  "evidence": {
+    "required": true,
+    "accepted_modes": ["static_command_analysis", "sandbox_scope_check"],
+    "minimum_count": 1,
+    "minimum_assurance": "bounded_checked"
+  },
+  "freshness": {
+    "require_fresh": true,
+    "tolerated_staleness_reasons": []
+  },
+  "risk": {
+    "max_impact": "low",
+    "max_exposure": 0.3,
+    "max_uncertainty": 0.2
+  },
+  "reversibility": {
+    "minimum": "reversible"
+  }
+}
