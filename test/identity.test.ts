@@ -1,22 +1,23 @@
 /**
- * Identity binding (design §5): what a decision_id does and does not bind.
+ * Identity binding (design §5): what a decision_id binds.
  *
  *   decision_id = hash(action_digest, evidence_state_digest,
- *                      policy_id, policy_version)
+ *                      policy_digest, policy_id, policy_version)
  *
- * Two components are content hashes; the other two are *labels*. That
- * asymmetry is deliberate — the evidence digest must exclude policy so that
- * attribution can separate causes — but it means the binding to policy is only
- * as strong as the host's discipline about its own version labels. The last
- * test here pins that limitation rather than leaving it to be discovered.
+ * Up to v0.2 the policy was bound by *label* only (`policy_id`, `version`), on
+ * the stated grounds that a content hash would not help because a host could
+ * rewrite a policy behind an unchanged version. That reasoning was wrong: a
+ * content hash moves with the content precisely regardless of the label, so it
+ * detects exactly that rewrite. `policy_digest` closes the hole, and the last
+ * two tests here assert it closed rather than pinning its shape.
  */
 
-import { notStrictEqual, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, notStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { attribute } from '../src/attribute.ts';
 import { decide } from '../src/decide.ts';
-import { actionDigest, evidenceStateDigest } from '../src/digest.ts';
+import { actionDigest, evidenceStateDigest, policyDigest } from '../src/digest.ts';
 import type { Policy, Request, RequestDigests } from '../src/types.ts';
 import { AT, baseRequest, basePolicy, passingEvidence } from './builders.ts';
 
@@ -90,22 +91,15 @@ describe('identity binding', () => {
   });
 
   /**
-   * KNOWN LIMITATION, pinned deliberately.
+   * The hole that v0.2 declared unclosable, closed.
    *
-   * decision_id binds the policy by *label*, not by content. Two policies
-   * sharing (policy_id, version) but differing in substance therefore produce
-   * the same decision_id while producing different outcomes — a genuine
-   * collision, and one attribute() cannot see either (it reports no_change).
-   *
-   * The design keeps the label binding on purpose: hashing the policy into the
-   * decision would not by itself fix this (the host could still mutate a
-   * version in place), and evidence_state_digest must stay policy-free
-   * regardless. What closes the hole is a host-side rule — (policy_id,
-   * version) is immutable; any change of substance is a version bump — so the
-   * discipline is stated in docs/00_design.md §5 and asserted here in the form
-   * it actually has, not in the form one might wish it had.
+   * A policy rewritten in place — same policy_id, same version, different
+   * substance — used to yield the same decision_id while yielding a different
+   * outcome, and attribute() reported no_change. The content hash sees it,
+   * because a content hash is a function of the content and not of the label
+   * the host chose to leave alone.
    */
-  it('the same policy label over different policy content collides — a documented hole', async () => {
+  it('the same policy label over different policy content no longer collides', async () => {
     const request = baseRequest();
     const lenient = basePolicy(); // max_impact: medium
     const strict = basePolicy({ risk: { max_impact: 'none' } }); // same id, same version
@@ -116,10 +110,36 @@ describe('identity binding', () => {
     const b = await decideFrom(strict, request);
 
     notStrictEqual(a.outcome, b.outcome); // the boundary really did move
-    strictEqual(a.decision_id, b.decision_id); // ...and identity did not notice
-    strictEqual(attribute(a, b).cause, 'no_change');
-    // The transition is still recorded, which is the one signal a host has
-    // that something changed behind an unchanged label.
-    strictEqual(attribute(a, b).outcome_transition?.to, b.outcome);
+    notStrictEqual(a.identity.policy_digest, b.identity.policy_digest); // ...and identity saw it
+    notStrictEqual(a.decision_id, b.decision_id);
+
+    const result = attribute(a, b);
+    strictEqual(result.cause, 'policy_change'); // no longer 'no_change'
+    deepStrictEqual(result.changed_components, ['policy_digest']);
+    strictEqual(result.outcome_transition?.to, b.outcome);
+
+    // The separation the design does keep: the evidence digest stays
+    // policy-free, so a policy change is never attributable to the evidence.
+    strictEqual(a.identity.evidence_state_digest, b.identity.evidence_state_digest);
+    strictEqual(a.identity.action_digest, b.identity.action_digest);
+  });
+
+  it('the policy digest is the kernel’s own, not a value the host can supply', async () => {
+    const policy = basePolicy();
+    const decision = await decideFrom(policy, baseRequest());
+    strictEqual(decision.identity.policy_digest, await policyDigest(policy));
+    // Reordering a set inside the policy is not a change of policy.
+    const permuted = basePolicy({
+      authority: {
+        non_human_may_hold: ['execute', 'judge', 'project', 'frame', 'observe'],
+        human_reserved: ['learn', 'authorize'],
+      },
+    });
+    strictEqual(await policyDigest(permuted), await policyDigest(policy));
+    // Changing its substance is.
+    notStrictEqual(
+      await policyDigest(basePolicy({ risk: { max_impact: 'none' } })),
+      await policyDigest(policy),
+    );
   });
 });

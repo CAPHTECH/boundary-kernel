@@ -18,9 +18,10 @@
   ],
   "identity": {
     "action_digest": "sha256:8b1bf74ad28fc10cce5cc14966f38e4ffd0a493385c9855ce4d5677b7157a6fb",
-    "evidence_state_digest": "sha256:a5dc3b98234d1292642406777f7ceb30f538b2ec1265c47e8abcaf8ef401fbae"
+    "evidence_state_digest": "sha256:a5dc3b98234d1292642406777f7ceb30f538b2ec1265c47e8abcaf8ef401fbae",
+    "policy_digest": "sha256:b576cf7aeac640607091ee8520da14455017ccd1dc7016ef8b4a89cb8f9c780c"
   },
   "routing": {},
   "computed_at": "2026-08-09T09:05:01Z",
-  "kernel_version": "0.2.0"
+  "kernel_version": "0.3.0"
 }

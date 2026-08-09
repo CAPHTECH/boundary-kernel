@@ -1,6 +1,6 @@
 {
   "schema": "rbk.decision.v2",
-  "decision_id": "sha256:80efd9d76f3b70eba7cb5be1e62d4413d543cded114e9675840cdfb70cdd2101",
+  "decision_id": "sha256:0cc47c5eb7a4d8feaba1f6aaea6e75f24088abee228abd3f9481b2d123b8e84d",
   "request_id": "req-05-human-required-with-incomplete-basis",
   "policy_id": "code-patch-default",
   "policy_version": "1.0.0",
@@ -25,11 +25,12 @@
   ],
   "identity": {
     "action_digest": "sha256:44224ed34c7eb8c95225454dcd255c594d0d97abd0b0b31f9ebb58c23d91100b",
-    "evidence_state_digest": "sha256:3b1f3d341a095dcbb9c285a08014298a948a9ea50267bb008ff9c19a08ef4d85"
+    "evidence_state_digest": "sha256:3b1f3d341a095dcbb9c285a08014298a948a9ea50267bb008ff9c19a08ef4d85",
+    "policy_digest": "sha256:f71e8fcedfc243653bd15c86b703d2d35f4c1b193a779f92157921b844f0810c"
   },
   "routing": {
     "required_evidence_modes": ["executable_test", "static_verification"]
   },
   "computed_at": "2026-08-09T13:05:01Z",
-  "kernel_version": "0.2.0"
+  "kernel_version": "0.3.0"
 }

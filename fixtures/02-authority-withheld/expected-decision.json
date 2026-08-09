@@ -25,11 +25,12 @@
   ],
   "identity": {
     "action_digest": "sha256:11d8509f8f0ab9b72a1c2ac9b6fe8ba922d97dfec36baf35b9871fede5c781fd",
-    "evidence_state_digest": "sha256:df2b9d0ea3015957144a5b9b2e0a6b05e6a2412454bf7c9a919b747c0783ab5d"
+    "evidence_state_digest": "sha256:df2b9d0ea3015957144a5b9b2e0a6b05e6a2412454bf7c9a919b747c0783ab5d",
+    "policy_digest": "sha256:68137a05cfe0ea212c044efcf7faef133b189461698e1d3f039a04d4641bb4e4"
   },
   "routing": {
     "escalate_to": "human:support-lead"
   },
   "computed_at": "2026-08-09T10:05:01Z",
-  "kernel_version": "0.2.0"
+  "kernel_version": "0.3.0"
 }

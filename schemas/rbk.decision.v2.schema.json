@@ -20,7 +20,7 @@
     "schema": { "const": "rbk.decision.v2" },
 
     "decision_id": {
-      "description": "hash(action_digest, evidence_state_digest, policy_id, policy_version)。policy を含むため、policy 変更は新しい decision を生む。",
+      "description": "hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version)。policy を content hash で含むため、同じ (policy_id, version) のまま内容を書き換えても別の decision_id になる。",
       "$ref": "#/$defs/hash"
     },
     "request_id": { "$ref": "#/$defs/identifier" },
@@ -59,13 +59,17 @@
     },
 
     "identity": {
-      "description": "決定の同一性。evidence_state_digest は policy を含まない — この分離が原因帰属を可能にする。",
+      "description": "決定の同一性。evidence_state_digest は policy を含まない — この分離が原因帰属を可能にする。policy 自体は policy_digest として別に束縛する。両立する: 証拠の digest は policy-free のまま、decision の同一性は policy を内容で縛る。",
       "type": "object",
       "additionalProperties": false,
-      "required": ["action_digest", "evidence_state_digest"],
+      "required": ["action_digest", "evidence_state_digest", "policy_digest"],
       "properties": {
         "action_digest": { "$ref": "#/$defs/hash" },
-        "evidence_state_digest": { "$ref": "#/$defs/hash" }
+        "evidence_state_digest": { "$ref": "#/$defs/hash" },
+        "policy_digest": {
+          "description": "適用した policy の content hash(正規化後の canonical JSON)。policy_id と version はホストが付けるラベルであり、内容の書き換えを検出できない。これは検出する。任意フィールドにはしない — 欠けていてよいことにすると、同一性を縛らないホストが「縛った」と読める decision を出せてしまう。",
+          "$ref": "#/$defs/hash"
+        }
       }
     },
 
@@ -83,7 +87,15 @@
           "description": "【集合】正準順は enum 宣言順。",
           "type": "array",
           "uniqueItems": true,
-          "items": { "enum": ["action_digest", "evidence_state_digest", "policy_id", "policy_version"] }
+          "items": {
+            "enum": [
+              "action_digest",
+              "evidence_state_digest",
+              "policy_digest",
+              "policy_id",
+              "policy_version"
+            ]
+          }
         },
         "outcome_transition": {
           "description": "注目すべき遷移: auto_apply → human_required は境界が締まったことを、逆は緩んだことを意味する。後者は policy_change 以外の原因なら要調査。",

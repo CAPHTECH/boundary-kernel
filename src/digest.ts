@@ -9,13 +9,19 @@
  *
  * The separation that matters (design §5):
  *   evidence_state_digest = hash(evidence state only)   ← never includes policy
+ *   policy_digest         = hash(policy content)
  *   decision_id           = hash(action_digest, evidence_state_digest,
- *                                policy_id, policy_version)
+ *                                policy_digest, policy_id, policy_version)
+ *
+ * The two are not in tension: the evidence digest stays policy-free so that
+ * attribution can separate an evidence change from a policy change, while the
+ * decision's own identity binds the policy by content and not merely by the
+ * host's label.
  */
 
 import { canonicalJson } from './canonical.ts';
-import { normalizeAction, normalizeEvidenceState } from './normalize.ts';
-import type { Action, EvidenceState, Hash, Identifier, Semver } from './types.ts';
+import { normalizeAction, normalizeEvidenceState, normalizePolicy } from './normalize.ts';
+import type { Action, EvidenceState, Hash, Identifier, Policy, Semver } from './types.ts';
 
 const subtle = (): SubtleCrypto => {
   const c: Crypto | undefined = globalThis.crypto;
@@ -59,30 +65,52 @@ export async function evidenceStateDigest(evidenceState: EvidenceState): Promise
 }
 
 /**
+ * The pre-image of `policy_digest`, shared with the synchronous path in
+ * `decide.ts` (which computes the policy digest itself rather than accepting
+ * one, so that no host can hand the kernel a digest of a policy other than the
+ * one it was asked to apply).
+ */
+export function policyDigestPreimage(policy: Policy): string {
+  return canonicalJson(normalizePolicy(policy));
+}
+
+/**
+ * Digest of the policy's content. Unlike `policy_id` and `version` — which are
+ * labels the host controls — this moves whenever the policy's substance moves,
+ * including when the substance is changed behind an unchanged label.
+ */
+export async function policyDigest(policy: Policy): Promise<Hash> {
+  const bytes = new TextEncoder().encode(policyDigestPreimage(policy));
+  return `sha256:${toHex(await subtle().digest('SHA-256', bytes))}`;
+}
+
+export interface DecisionIdInput {
+  action_digest: Hash;
+  evidence_state_digest: Hash;
+  policy_digest: Hash;
+  policy_id: Identifier;
+  policy_version?: Semver;
+}
+
+/**
  * The pre-image of `decision_id`. Shared with the synchronous path in
  * `decide.ts` so the two can never drift apart.
  */
-export function decisionIdPreimage(input: {
-  action_digest: Hash;
-  evidence_state_digest: Hash;
-  policy_id: Identifier;
-  policy_version?: Semver;
-}): string {
+export function decisionIdPreimage(input: DecisionIdInput): string {
   return canonicalJson({
     action_digest: input.action_digest,
     evidence_state_digest: input.evidence_state_digest,
+    policy_digest: input.policy_digest,
     policy_id: input.policy_id,
     policy_version: input.policy_version,
   });
 }
 
-/** `decision_id = hash(action_digest, evidence_state_digest, policy_id, policy_version)`. */
-export async function decisionId(input: {
-  action_digest: Hash;
-  evidence_state_digest: Hash;
-  policy_id: Identifier;
-  policy_version?: Semver;
-}): Promise<Hash> {
+/**
+ * `decision_id = hash(action_digest, evidence_state_digest, policy_digest,
+ * policy_id, policy_version)`.
+ */
+export async function decisionId(input: DecisionIdInput): Promise<Hash> {
   const bytes = new TextEncoder().encode(decisionIdPreimage(input));
   return `sha256:${toHex(await subtle().digest('SHA-256', bytes))}`;
 }

@@ -6,8 +6,12 @@
  *
  *     action_digest changed only         → action_change
  *     evidence_state_digest changed only → evidence_change
- *     policy_id / policy_version only    → policy_change
+ *     policy_digest / _id / _version only → policy_change
  *     more than one of the above         → unattributable
+ *
+ * `policy_digest` is what makes a policy change visible even when the host
+ * left `(policy_id, version)` untouched: the label can lie, the content hash
+ * cannot.
  *
  * `unattributable` is stated, never guessed at. Presenting a multi-component
  * change as a single cause is exactly the failure this discipline forbids —
@@ -25,6 +29,9 @@ export function attribute(prev: Decision, next: Decision): Attribution {
   if (prev.identity.evidence_state_digest !== next.identity.evidence_state_digest) {
     changed_components.push('evidence_state_digest');
   }
+  if (prev.identity.policy_digest !== next.identity.policy_digest) {
+    changed_components.push('policy_digest');
+  }
   if (prev.policy_id !== next.policy_id) {
     changed_components.push('policy_id');
   }
@@ -32,8 +39,8 @@ export function attribute(prev: Decision, next: Decision): Attribution {
     changed_components.push('policy_version');
   }
 
-  // policy_id and policy_version are two components of one thing; changing
-  // both is still a single policy change.
+  // policy_digest, policy_id and policy_version are three components of one
+  // thing; changing several of them is still a single policy change.
   const causes = new Set<'action_change' | 'evidence_change' | 'policy_change'>();
   for (const component of changed_components) {
     switch (component) {
@@ -43,6 +50,7 @@ export function attribute(prev: Decision, next: Decision): Attribution {
       case 'evidence_state_digest':
         causes.add('evidence_change');
         break;
+      case 'policy_digest':
       case 'policy_id':
       case 'policy_version':
         causes.add('policy_change');

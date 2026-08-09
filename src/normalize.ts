@@ -22,7 +22,9 @@
  *      faithful rendering of it.
  *
  * Which arrays are sets and which are sequences is stated in
- * `docs/00_design.md` §5 and in the schemas, never left implicit.
+ * `docs/00_design.md` §5 and in the schemas, never left implicit. The same two
+ * rules apply to the policy (`normalizePolicy`), which is a digest input since
+ * `policy_digest` was added to the decision's identity.
  */
 
 import {
@@ -32,6 +34,7 @@ import {
   type AgencyDimension,
   type EvidenceItem,
   type EvidenceState,
+  type Policy,
   type StalenessReason,
 } from './types.ts';
 
@@ -123,5 +126,48 @@ export function normalizeEvidenceState(state: EvidenceState): EvidenceState {
   return {
     ...normalized,
     items: sortEvidenceItems(normalized.items.map(normalizeEvidenceItem)),
+  };
+}
+
+/**
+ * The policy as `policy_digest` sees it. Design §5 already declared which of
+ * the policy's arrays are sets; now that the policy is a digest input, that
+ * declaration is enforced here rather than merely written down.
+ *
+ * `description` and `authorize_delegation_rationale` are prose, and prose is
+ * part of the policy's content: two policies whose rationales differ are
+ * different policies, so nothing is stripped. Only NFC and set order are
+ * settled.
+ */
+export function normalizePolicy(policy: Policy): Policy {
+  const normalized = nfcDeep(policy);
+  return {
+    ...normalized,
+    scope: {
+      ...normalized.scope,
+      action_kinds: sortStrings(normalized.scope.action_kinds),
+      ...(normalized.scope.domains ? { domains: sortStrings(normalized.scope.domains) } : {}),
+    },
+    authority: {
+      ...normalized.authority,
+      non_human_may_hold: sortDimensions(normalized.authority.non_human_may_hold),
+      ...(normalized.authority.human_reserved
+        ? { human_reserved: sortDimensions(normalized.authority.human_reserved) }
+        : {}),
+    },
+    evidence: {
+      ...normalized.evidence,
+      accepted_modes: sortStrings(normalized.evidence.accepted_modes),
+    },
+    freshness: {
+      ...normalized.freshness,
+      ...(normalized.freshness.tolerated_staleness_reasons
+        ? {
+            tolerated_staleness_reasons: sortStalenessReasons(
+              normalized.freshness.tolerated_staleness_reasons,
+            ),
+          }
+        : {}),
+    },
   };
 }

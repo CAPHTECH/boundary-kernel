@@ -55,7 +55,8 @@ describe('attribute', () => {
     );
     const result = attribute(base(), next);
     strictEqual(result.cause, 'policy_change');
-    deepStrictEqual(result.changed_components, ['policy_id']);
+    // The id moved and so did the content hash; both are the same one cause.
+    deepStrictEqual(result.changed_components, ['policy_digest', 'policy_id']);
     // The policy change must never be reported as an evidence change (design §6).
     strictEqual(result.changed_components?.includes('evidence_state_digest'), false);
     deepStrictEqual(result.outcome_transition, { from: 'auto_apply', to: 'human_required' });
@@ -70,12 +71,24 @@ describe('attribute', () => {
     );
     const result = attribute(base(), next);
     strictEqual(result.cause, 'policy_change');
-    deepStrictEqual(result.changed_components, ['policy_id', 'policy_version']);
+    deepStrictEqual(result.changed_components, ['policy_digest', 'policy_id', 'policy_version']);
   });
 
   it('a version bump alone is a policy change', () => {
     const next = decide(basePolicy({ version: '1.1.0' }), baseRequest(), DIGESTS, { computed_at: AT });
     strictEqual(attribute(base(), next).cause, 'policy_change');
+  });
+
+  it('a policy rewritten behind an unchanged label is a policy change, not no_change', () => {
+    const next = decide(
+      basePolicy({ risk: { max_impact: 'none' } }), // same policy_id, same version
+      baseRequest(),
+      DIGESTS,
+      { computed_at: AT },
+    );
+    const result = attribute(base(), next);
+    strictEqual(result.cause, 'policy_change');
+    deepStrictEqual(result.changed_components, ['policy_digest']);
   });
 
   it('multiple components across categories → unattributable, never a guess', () => {
@@ -90,6 +103,7 @@ describe('attribute', () => {
     deepStrictEqual(result.changed_components, [
       'action_digest',
       'evidence_state_digest',
+      'policy_digest',
       'policy_id',
     ]);
   });

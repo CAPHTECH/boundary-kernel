@@ -3,7 +3,14 @@ import { describe, it } from 'node:test';
 
 import { attribute } from '../src/attribute.ts';
 import { canonicalJson } from '../src/canonical.ts';
-import { actionDigest, decisionId, decisionIdPreimage, digest, evidenceStateDigest } from '../src/digest.ts';
+import {
+  actionDigest,
+  decisionId,
+  decisionIdPreimage,
+  digest,
+  evidenceStateDigest,
+  policyDigest,
+} from '../src/digest.ts';
 import { nfcDeep, normalizeAction, normalizeEvidenceState } from '../src/normalize.ts';
 import { sha256Utf8 } from '../src/sha256.ts';
 import { decide } from '../src/decide.ts';
@@ -232,17 +239,24 @@ function withoutDigest<T extends { digest?: string }>(value: T): Omit<T, 'digest
 }
 
 describe('decision_id', () => {
-  it('is hash(action_digest, evidence_state_digest, policy_id, policy_version)', async () => {
+  it('is hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version)', async () => {
     const policy = basePolicy();
     const decision = decide(policy, baseRequest(), DIGESTS, { computed_at: AT });
     const expected = await decisionId({
       action_digest: DIGESTS.action_digest,
       evidence_state_digest: DIGESTS.evidence_state_digest,
+      policy_digest: await policyDigest(policy),
       policy_id: policy.policy_id,
       policy_version: policy.version,
     });
     strictEqual(decision.decision_id, expected);
     strictEqual(/^sha256:[0-9a-f]{64}$/.test(decision.decision_id), true);
+  });
+
+  it('the synchronous policy digest agrees with the Web Crypto one', async () => {
+    const policy = basePolicy();
+    const decision = decide(policy, baseRequest(), DIGESTS, { computed_at: AT });
+    strictEqual(decision.identity.policy_digest, await policyDigest(policy));
   });
 
   it('changes when the policy version changes, with identical evidence', () => {
@@ -267,11 +281,24 @@ describe('decision_id', () => {
       decisionIdPreimage({
         action_digest: 'sha256:aa',
         evidence_state_digest: 'sha256:bb',
+        policy_digest: 'sha256:cc',
         policy_id: 'p',
         policy_version: '1.0.0',
       }),
-      '{"action_digest":"sha256:aa","evidence_state_digest":"sha256:bb","policy_id":"p","policy_version":"1.0.0"}',
+      '{"action_digest":"sha256:aa","evidence_state_digest":"sha256:bb",' +
+        '"policy_digest":"sha256:cc","policy_id":"p","policy_version":"1.0.0"}',
     );
+  });
+
+  it('a policy rewritten behind an unchanged label moves the id', () => {
+    const request = baseRequest();
+    const before = decide(basePolicy(), request, DIGESTS, { computed_at: AT });
+    const after = decide(basePolicy({ risk: { max_impact: 'none' } }), request, DIGESTS, {
+      computed_at: AT,
+    });
+    strictEqual(before.policy_id, after.policy_id);
+    strictEqual(before.policy_version, after.policy_version);
+    notStrictEqual(before.decision_id, after.decision_id);
   });
 });
 
@@ -283,7 +310,7 @@ describe('decision_id', () => {
 describe('evidence_state_digest excludes policy', () => {
   const evidence_state = { items: [passingEvidence()] };
 
-  it('two decisions under different policies share both identity digests', async () => {
+  it('two decisions under different policies share the action and evidence digests', async () => {
     const digests: RequestDigests = {
       action_digest: await actionDigest(baseRequest().action),
       evidence_state_digest: await evidenceStateDigest(evidence_state),
@@ -304,7 +331,7 @@ describe('evidence_state_digest excludes policy', () => {
 
     const result = attribute(lenient, strict);
     strictEqual(result.cause, 'policy_change');
-    deepStrictEqual(result.changed_components, ['policy_id']);
+    deepStrictEqual(result.changed_components, ['policy_digest', 'policy_id']);
     deepStrictEqual(result.outcome_transition, { from: 'auto_apply', to: 'human_required' });
   });
 

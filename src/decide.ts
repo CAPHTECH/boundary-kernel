@@ -3,9 +3,12 @@
  *
  * `decide()` is a synchronous pure function. Digests are passed in rather than
  * computed here so the kernel never depends on an async crypto API and so
- * every branch is trivially testable. The only hashing that happens inside is
- * `decision_id`, which uses the dependency-free synchronous SHA-256 in
- * `sha256.ts` (byte-identical to the Web Crypto path in `digest.ts`).
+ * every branch is trivially testable. The hashing that does happen inside —
+ * `policy_digest` and `decision_id` — uses the dependency-free synchronous
+ * SHA-256 in `sha256.ts` (byte-identical to the Web Crypto path in
+ * `digest.ts`). The policy is hashed here rather than passed in because the
+ * kernel holds the policy already, and because an identity that depends on the
+ * host's own digest of the policy would not bind the policy at all.
  *
  * Two axes, not one (design §3, corrected in v0.2):
  *
@@ -27,7 +30,7 @@
  * gap is recorded whatever the routing says.
  */
 
-import { decisionIdPreimage } from './digest.ts';
+import { decisionIdPreimage, policyDigestPreimage } from './digest.ts';
 import { normalizeAction, normalizeEvidenceState, sortStrings } from './normalize.ts';
 import { sha256Utf8 } from './sha256.ts';
 import {
@@ -47,7 +50,7 @@ import {
   type Verdict,
 } from './types.ts';
 
-export const KERNEL_VERSION: Semver = '0.2.0';
+export const KERNEL_VERSION: Semver = '0.3.0';
 
 export interface DecideOptions {
   /**
@@ -100,10 +103,17 @@ export function decide(
   const outcome = compose(factors.map((f) => f.verdict));
   const basis_complete = composeBasis(factors);
 
+  // The policy digest is computed here rather than accepted as an argument:
+  // it is the one part of the identity that must not depend on the host's
+  // discipline, since binding the policy by content is precisely what stops a
+  // rewrite behind an unchanged (policy_id, version) from going unnoticed.
+  const policy_digest = `sha256:${sha256Utf8(policyDigestPreimage(policy))}`;
+
   const decision_id = `sha256:${sha256Utf8(
     decisionIdPreimage({
       action_digest: digests.action_digest,
       evidence_state_digest: digests.evidence_state_digest,
+      policy_digest,
       policy_id: policy.policy_id,
       policy_version: policy.version,
     }),
@@ -121,6 +131,7 @@ export function decide(
     identity: {
       action_digest: digests.action_digest,
       evidence_state_digest: digests.evidence_state_digest,
+      policy_digest,
     },
     routing: {},
     computed_at: options.computed_at ?? new Date().toISOString(),

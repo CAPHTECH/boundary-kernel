@@ -274,6 +274,13 @@ export interface FactorVerdict {
 export interface DecisionIdentity {
   action_digest: Hash;
   evidence_state_digest: Hash;
+  /**
+   * Content hash of the policy that was applied. `policy_id` and
+   * `policy_version` are labels the host controls; this is not, so a policy
+   * rewritten in place is visible to `attribute()` instead of silently
+   * producing a different outcome under an identical identity (design §5).
+   */
+  policy_digest: Hash;
 }
 
 export type AttributionCause =
@@ -286,6 +293,7 @@ export type AttributionCause =
 export type ChangedComponent =
   | 'action_digest'
   | 'evidence_state_digest'
+  | 'policy_digest'
   | 'policy_id'
   | 'policy_version';
 

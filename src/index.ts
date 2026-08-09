@@ -16,14 +16,18 @@ export {
   digest,
   actionDigest,
   evidenceStateDigest,
+  policyDigest,
+  policyDigestPreimage,
   decisionId,
   decisionIdPreimage,
+  type DecisionIdInput,
 } from './digest.ts';
 export { canonicalJson, type JsonValue } from './canonical.ts';
 export {
   nfcDeep,
   normalizeAction,
   normalizeEvidenceState,
+  normalizePolicy,
   sortDimensions,
   sortEvidenceItems,
   sortStalenessReasons,

@@ -6,7 +6,7 @@ AI が提案した行為について、**一つの問いだけ**を扱う契約�
 
 答えは決定論的に計算されます。行き先は三値、それとは別に「その判定を支える証拠基盤が十分だったか」が一つの真偽値で返ります。同じ入力なら常に同じ答えが出て、なぜそう判定したかの理由が必ず添えられます。
 
-> **ステータス: 実験的 (v0.2.0)。** スキーマはまだ固定していません。本番運用を前提にした保証はありません。v0.2 で `rbk.decision` に破壊的変更が入っています(下記)。
+> **ステータス: 実験的 (v0.3.0)。** スキーマはまだ固定していません。本番運用を前提にした保証はありません。v0.2 で `rbk.decision` に破壊的変更が入っています(下記)。
 
 ## 二軸 — routing と measurement
 
@@ -46,6 +46,8 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 
 どの配列が集合でどれが順序付きかは [`docs/00_design.md` §5](docs/00_design.md) の表と各スキーマの `description`(【集合】/【順序付き】)に明記してあります。暗黙にはしません。
 
+**v0.3 の訂正 — policy を content hash で縛る。** v0.2 の `decision_id` は policy を `policy_id` と `version` というラベルでしか縛っておらず、同じラベルのまま内容を書き換えた policy は同じ `decision_id` を生み、`attribute()` は `no_change` と報告していました。設計文書はこれを「content hash を入れても同じ version のまま書き換えられたら検出できない」という理由で塞げない穴としていましたが、**この理由付けが誤りでした** — content hash はラベルと独立に内容の変更で動くので、まさにその書き換えを検出します。`identity.policy_digest`(必須)を追加し、`decision_id` の入力に含めました。`evidence_state_digest` は従来どおり policy を含みません(この分離が原因帰属を可能にしているため)。
+
 詳細な設計根拠は [`docs/00_design.md`](docs/00_design.md) にあります。
 
 ## 何をしないか
@@ -62,7 +64,7 @@ artifact 非依存です。コードレビューの自動マージ、RAG 評価�
 必要なもの: Node.js 22+(TypeScript を直接実行するため)、Python 3 と `jsonschema`(スキーマ検証のため)。
 
 ```bash
-# TypeScript 参照実装 (tsc --noEmit + node:test, 150 テスト)
+# TypeScript 参照実装 (tsc --noEmit + node:test, 154 テスト)
 npm install
 npm test
 
@@ -82,7 +84,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v2`(JSON Schema Draft 2020-12)。 |
 | `fixtures/` | 5シナリオ。`auto_apply` / 権限の留保 / 証拠の陳腐化による `incomplete` / リスク超過による `human_required` / **`human_required` と基盤欠損の同時成立**。各 `policy.json` + `request.json` + `expected-decision.json`。 |
 | `src/` | TypeScript 参照実装。ランタイム依存ゼロ。`decide()` は**同期の純関数**で、digest は引数で受け取るため crypto に依存しません。 |
-| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(既知の穴を含む)、digest の決定論性と集合の順序非依存、変化の帰属。 |
+| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(policy を content hash で縛ること)、digest の決定論性と集合の順序非依存、変化の帰属。 |
 | `experiments/herdr-approvals/` | 実地テスト(下記)。 |
 
 `validate.py` はスキーマだけでは強制できない不変条件も検査します — factor が6種揃っているか、非 `satisfied` に理由があるか、routing 規則が守られているか、`basis_complete` が factor の連言になっているか、二軸の同値(`outcome == incomplete` ⟺ 基盤欠損かつ `human_required` 無し)が成り立つか、`auto_apply` なら留保次元が空か、など。

@@ -114,32 +114,45 @@ sdde `docs/16` §10 の分離規律を採用する。
 
 ```
 evidence_state_digest = hash(証拠の状態のみ)        ← policy を含めない
-decision_id           = hash(action_digest, evidence_state_digest, policy_id)
+policy_digest         = hash(policy の内容)
+decision_id           = hash(action_digest, evidence_state_digest,
+                             policy_digest, policy_id, policy_version)
 ```
 
 policy を変えても `evidence_state_digest` は変わらない。これにより「同じ証拠に別の policy を当てる」比較が可能になり、**決定が変わった原因を機械的に切り分けられる**:
 
 ```
-action_digest のみ変化          → action change
-evidence_state_digest のみ変化  → evidence change
-policy_id のみ変化              → policy change
-複数変化                        → 分離不能。その旨を宣言する(推測しない)
+action_digest のみ変化                        → action change
+evidence_state_digest のみ変化                → evidence change
+policy_digest / policy_id / version のみ変化  → policy change
+複数の軸が変化                                → 分離不能。その旨を宣言する(推測しない)
 ```
+
+`policy_digest` / `policy_id` / `version` は同じ一つのもの(policy)の3成分であり、複数が同時に動いても原因は一つ、policy change である。
 
 「分離できない比較を単一原因として提示しない」— sdde の規律をそのまま継承する。
 
-### 同一性が縛れていないもの(既知の穴)
+### policy をラベルで縛っていた穴(v0.3 で塞いだ)
 
-`decision_id` の4成分のうち、`action_digest` と `evidence_state_digest` は content hash だが、**`policy_id` と `policy_version` はラベルである**。したがって:
+v0.2 の `decision_id` は policy を `policy_id` と `policy_version` — すなわち**ホストが付けるラベル**でしか縛っていなかった。その帰結:
 
-> **同じ `(policy_id, version)` で内容の違う policy は、同じ `decision_id` を生む。** outcome が変わっていても `attribute()` は `no_change` と報告する。
+> 同じ `(policy_id, version)` で内容の違う policy が、同じ `decision_id` を生む。outcome が変わっていても `attribute()` は `no_change` と報告する。
 
-これは v0.2 時点で塞いでいない。policy の content hash を `decision_id` に含めても、ホストが同じ version のまま policy を書き換える限り検出できず、`evidence_state_digest` は policy を含めてはならないという制約も別途残る。したがって現時点の規範は**ホスト側の規律**である:
+設計文書はこれを「塞げない穴」として記述し、理由をこう書いていた——「policy の content hash を入れても、ホストが同じ version のまま書き換える限り検出できない」。**この理由付けは誤りである。** content hash は version ラベルとは独立に、policy の内容が変わった時点で変わる。ラベルを据え置いたまま中身を書き換える行為こそ、content hash が検出するものである。誤った根拠で穴を残していた。
 
-- **`(policy_id, version)` は不変とする。** 実質的な変更は必ず version を上げる。
-- 上げないなら、その decision の同一性は信頼できない — 唯一の手掛かりは `attribution.outcome_transition` だけになる。
+**塞いだ内容**:
 
-この穴はテスト(`test/identity.test.ts`)で「望ましい形」ではなく「実際の形」のまま固定してある。将来 `identity.policy_digest` を足すかどうかは未決である。
+- `identity.policy_digest` = 正規化後の policy の canonical JSON の SHA-256。decision schema で**必須**とする(任意にすると「無い = 縛っていない」が「無い = 問題ない」と読まれ、v1 の `basis_complete` と同じ失敗を再生産する)。
+- `decision_id` の入力に `policy_digest` を含める。同じラベルで内容の違う policy は、別の `decision_id` を生む。
+- `attribute()` は `policy_digest` の変化を `policy_change` として報告する。ラベル据え置きの書き換えはもう `no_change` にならない。
+- カーネルは `policy_digest` を**引数として受け取らず、自分で計算する**。action / evidence の digest はホストが計算して渡す入力だが、policy の同一性はホストの規律に依存させない — させたら塞いだことにならない。
+
+**塞いでいないもの(依然として真)**:
+
+- `evidence_state_digest` は policy を含まない。これは穴ではなく設計であり、変えない。「同じ証拠に別の policy を当てる」比較が可能なのはこの分離のおかげである。`policy_digest` は decision の同一性側に置かれるので、両者は両立する。
+- `(policy_id, version)` を不変に保つホスト側の規律は依然として有用である。ただしそれはもう**同一性の唯一の防壁ではない**。規律が破られたことは `policy_digest` が機械的に示す。
+
+`test/identity.test.ts` はこの穴が塞がっていることを確認する — かつては穴の形を固定するテストが同じ場所にあった。
 
 ### 正規化(canonicalization)— v0.2 で追加
 
@@ -178,7 +191,7 @@ digest は言語非依存の契約である。同じ意味の入力が実装ご�
 | `action.applicability.reasons` | ホストが述べた理由の叙述順 |
 | `factor.reasons` | カーネルが検出した順。並べ替えは根拠の提示順を変える |
 
-policy は digest の入力ではないが、集合として扱う配列は同じ規律に従う(`policy_id` + `version` の下で内容が同じなら、順序違いは同じ policy である)。
+policy も `policy_digest` を通じて digest の入力である(v0.3)。集合として扱う配列は同じ規律に従い、`normalizePolicy()` が実際に適用する — 順序違いは同じ policy であり、同じ `policy_digest` を生む。逆に `description` や `authorize_delegation_rationale` の文面は policy の内容であって、変えれば digest は動く。
 
 `decide()` 自身も正規化後の request を見る。したがって集合の順序だけが違う2つの request は、digest が一致するだけでなく **decision がフィールド単位で一致する**。
 
