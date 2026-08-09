@@ -116,8 +116,13 @@ sdde `docs/16` §10 の分離規律を採用する。
 evidence_state_digest = hash(証拠の状態のみ)        ← policy を含めない
 policy_digest         = hash(policy の内容)
 decision_id           = hash(action_digest, evidence_state_digest,
-                             policy_digest, policy_id, policy_version)
+                             policy_digest, policy_id, policy_version,
+                             decision_schema, kernel_version)
 ```
+
+`decision_id` は**入力だけでなく計算そのもの**を同定する。同じ入力でも、v1 の decision と v2 の decision は意味が違う(v1 は routing と measurement を1つの値に畳んでいた)し、カーネルの版が違えば同じ request から違う境界を引きうる。したがって `decision_schema`(`rbk.decision.v2`)と `kernel_version` も digest の入力である。含めなければ、構造も意味論も違う2つの decision が同じ id を持つ。
+
+ここで束ねるのは**実際に計算したカーネルの版**(`KERNEL_VERSION`)であって、`decide()` のオプションでホストが差し替えられる表示用のラベルではない。後者を束ねると、同一の計算に対してホストが好きなだけ別の id を作れてしまう。
 
 policy を変えても `evidence_state_digest` は変わらない。これにより「同じ証拠に別の policy を当てる」比較が可能になり、**決定が変わった原因を機械的に切り分けられる**:
 

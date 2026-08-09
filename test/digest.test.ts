@@ -13,8 +13,8 @@ import {
 } from '../src/digest.ts';
 import { nfcDeep, normalizeAction, normalizeEvidenceState } from '../src/normalize.ts';
 import { sha256Utf8 } from '../src/sha256.ts';
-import { decide } from '../src/decide.ts';
-import type { EvidenceItem, RequestDigests } from '../src/types.ts';
+import { decide, KERNEL_VERSION } from '../src/decide.ts';
+import { DECISION_SCHEMA, type EvidenceItem, type RequestDigests } from '../src/types.ts';
 import { AT, baseRequest, basePolicy, DIGESTS, passingEvidence } from './builders.ts';
 import { FIXTURE_NAMES, loadFixture } from './helpers.ts';
 
@@ -239,7 +239,7 @@ function withoutDigest<T extends { digest?: string }>(value: T): Omit<T, 'digest
 }
 
 describe('decision_id', () => {
-  it('is hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version)', async () => {
+  it('is hash of the inputs *and* of the computation that read them', async () => {
     const policy = basePolicy();
     const decision = decide(policy, baseRequest(), DIGESTS, { computed_at: AT });
     const expected = await decisionId({
@@ -248,6 +248,8 @@ describe('decision_id', () => {
       policy_digest: await policyDigest(policy),
       policy_id: policy.policy_id,
       policy_version: policy.version,
+      decision_schema: DECISION_SCHEMA,
+      kernel_version: KERNEL_VERSION,
     });
     strictEqual(decision.decision_id, expected);
     strictEqual(/^sha256:[0-9a-f]{64}$/.test(decision.decision_id), true);
@@ -284,10 +286,37 @@ describe('decision_id', () => {
         policy_digest: 'sha256:cc',
         policy_id: 'p',
         policy_version: '1.0.0',
+        decision_schema: 'rbk.decision.v2',
+        kernel_version: '0.3.0',
       }),
-      '{"action_digest":"sha256:aa","evidence_state_digest":"sha256:bb",' +
+      '{"action_digest":"sha256:aa","decision_schema":"rbk.decision.v2",' +
+        '"evidence_state_digest":"sha256:bb","kernel_version":"0.3.0",' +
         '"policy_digest":"sha256:cc","policy_id":"p","policy_version":"1.0.0"}',
     );
+  });
+
+  /**
+   * A v1 and a v2 decision over identical inputs are different decisions —
+   * v1 folded routing and measurement into one value — and two kernel
+   * versions may draw different boundaries from the same request. Neither was
+   * in the pre-image before v0.3, so both collided under one id.
+   */
+  it('the schema identifier and the kernel version separate otherwise identical ids', async () => {
+    const policy = basePolicy();
+    const shared = {
+      action_digest: DIGESTS.action_digest,
+      evidence_state_digest: DIGESTS.evidence_state_digest,
+      policy_digest: await policyDigest(policy),
+      policy_id: policy.policy_id,
+      policy_version: policy.version,
+    };
+    const v2 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: '0.3.0' });
+    const v1 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v1', kernel_version: '0.3.0' });
+    const older = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: '0.2.0' });
+    notStrictEqual(v2, v1);
+    notStrictEqual(v2, older);
+    notStrictEqual(v1, older);
+    strictEqual(decide(policy, baseRequest(), DIGESTS, { computed_at: AT }).decision_id, v2);
   });
 
   it('a policy rewritten behind an unchanged label moves the id', () => {

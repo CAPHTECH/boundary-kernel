@@ -35,6 +35,7 @@ import { normalizeAction, normalizeEvidenceState, sortStrings } from './normaliz
 import { sha256Utf8 } from './sha256.ts';
 import {
   ASSURANCE_ORDER,
+  DECISION_SCHEMA,
   SEVERITY_ORDER,
   type AgencyDimension,
   type AssuranceLevel,
@@ -109,6 +110,13 @@ export function decide(
   // rewrite behind an unchanged (policy_id, version) from going unnoticed.
   const policy_digest = `sha256:${sha256Utf8(policyDigestPreimage(policy))}`;
 
+  // The schema and the kernel version identify the *computation*; the digests
+  // identify its inputs. Both are needed: a v1 and a v2 decision over identical
+  // inputs are different decisions (v1 folded routing into measurement), and a
+  // later kernel may draw a different boundary from the same request. Note
+  // that this is KERNEL_VERSION, the kernel that actually ran — not
+  // `options.kernel_version`, which only relabels the emitted field and must
+  // not let a host mint distinct identities for one computation.
   const decision_id = `sha256:${sha256Utf8(
     decisionIdPreimage({
       action_digest: digests.action_digest,
@@ -116,11 +124,13 @@ export function decide(
       policy_digest,
       policy_id: policy.policy_id,
       policy_version: policy.version,
+      decision_schema: DECISION_SCHEMA,
+      kernel_version: KERNEL_VERSION,
     }),
   )}`;
 
   const decision: Decision = {
-    schema: 'rbk.decision.v2',
+    schema: DECISION_SCHEMA,
     decision_id,
     request_id: request.request_id,
     policy_id: policy.policy_id,

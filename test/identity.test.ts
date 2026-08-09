@@ -2,7 +2,8 @@
  * Identity binding (design §5): what a decision_id binds.
  *
  *   decision_id = hash(action_digest, evidence_state_digest,
- *                      policy_digest, policy_id, policy_version)
+ *                      policy_digest, policy_id, policy_version,
+ *                      decision_schema, kernel_version)
  *
  * Up to v0.2 the policy was bound by *label* only (`policy_id`, `version`), on
  * the stated grounds that a content hash would not help because a host could
@@ -79,7 +80,13 @@ describe('identity binding', () => {
     strictEqual(honest, lying);
   });
 
-  it('decision_id ignores computed_at and kernel_version', async () => {
+  /**
+   * `computed_at` is wall clock, and `options.kernel_version` is only a label
+   * written into the emitted field. The identity binds `KERNEL_VERSION` — the
+   * kernel that actually ran — so that one computation cannot be given many
+   * ids by a host relabelling it.
+   */
+  it('decision_id ignores computed_at and the declared kernel_version label', async () => {
     const request = baseRequest();
     const digests = await digestsFor(request);
     const a = decide(basePolicy(), request, digests, { computed_at: AT, kernel_version: '0.2.0' });

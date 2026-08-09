@@ -11,7 +11,8 @@
  *   evidence_state_digest = hash(evidence state only)   ← never includes policy
  *   policy_digest         = hash(policy content)
  *   decision_id           = hash(action_digest, evidence_state_digest,
- *                                policy_digest, policy_id, policy_version)
+ *                                policy_digest, policy_id, policy_version,
+ *                                decision_schema, kernel_version)
  *
  * The two are not in tension: the evidence digest stays policy-free so that
  * attribution can separate an evidence change from a policy change, while the
@@ -90,16 +91,28 @@ export interface DecisionIdInput {
   policy_digest: Hash;
   policy_id: Identifier;
   policy_version?: Semver;
+  /** The decision schema the identity belongs to, e.g. `rbk.decision.v2`. */
+  decision_schema: string;
+  /** The kernel that computed the decision, not a label the host chose. */
+  kernel_version: Semver;
 }
 
 /**
  * The pre-image of `decision_id`. Shared with the synchronous path in
  * `decide.ts` so the two can never drift apart.
+ *
+ * `decision_schema` and `kernel_version` are in the pre-image because the
+ * identity names a computation, not just its inputs: a v1 and a v2 decision
+ * over identical inputs mean different things, and two kernel versions may
+ * compute different boundaries from the same request. Without them the two
+ * would collide under one id.
  */
 export function decisionIdPreimage(input: DecisionIdInput): string {
   return canonicalJson({
     action_digest: input.action_digest,
+    decision_schema: input.decision_schema,
     evidence_state_digest: input.evidence_state_digest,
+    kernel_version: input.kernel_version,
     policy_digest: input.policy_digest,
     policy_id: input.policy_id,
     policy_version: input.policy_version,
@@ -107,8 +120,8 @@ export function decisionIdPreimage(input: DecisionIdInput): string {
 }
 
 /**
- * `decision_id = hash(action_digest, evidence_state_digest, policy_digest,
- * policy_id, policy_version)`.
+ * `decision_id = hash(action_digest, decision_schema, evidence_state_digest,
+ * kernel_version, policy_digest, policy_id, policy_version)`.
  */
 export async function decisionId(input: DecisionIdInput): Promise<Hash> {
   const bytes = new TextEncoder().encode(decisionIdPreimage(input));

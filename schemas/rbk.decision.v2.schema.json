@@ -20,7 +20,7 @@
     "schema": { "const": "rbk.decision.v2" },
 
     "decision_id": {
-      "description": "hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version)。policy を content hash で含むため、同じ (policy_id, version) のまま内容を書き換えても別の decision_id になる。",
+      "description": "hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version, decision_schema, kernel_version)。policy を content hash で含むため、同じ (policy_id, version) のまま内容を書き換えても別の decision_id になる。schema 識別子とカーネル版も含む — 同じ入力でも v1 と v2 の decision は意味が違い、カーネルの版が違えば境界も違いうるため、同じ id を持ってはならない。",
       "$ref": "#/$defs/hash"
     },
     "request_id": { "$ref": "#/$defs/identifier" },

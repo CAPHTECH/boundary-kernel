@@ -234,6 +234,14 @@ export interface Request {
 // rbk.decision.v2
 // ---------------------------------------------------------------------------
 
+/**
+ * The decision schema this kernel emits. Part of `decision_id`'s pre-image:
+ * v1 and v2 decisions differ in structure *and* in meaning (v1 folded routing
+ * and measurement into one value), so the same inputs under the two schemas
+ * are not the same decision and must not share an identity.
+ */
+export const DECISION_SCHEMA = 'rbk.decision.v2' as const;
+
 export type Outcome = 'auto_apply' | 'human_required' | 'incomplete';
 
 export type FactorKind =
