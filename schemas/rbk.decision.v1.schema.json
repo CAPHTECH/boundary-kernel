@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caph.tech/schemas/rbk.decision.v1.schema.json",
+  "title": "Review Boundary Decision v1",
+  "description": "境界計算の出力。三値の結論と、それを導いた factor 別の根拠、および同一性(帰属のための digest 群)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "decision_id",
+    "request_id",
+    "policy_id",
+    "outcome",
+    "factors",
+    "identity",
+    "computed_at"
+  ],
+  "properties": {
+    "schema": { "const": "rbk.decision.v1" },
+
+    "decision_id": {
+      "description": "hash(action_digest, evidence_state_digest, policy_id, policy_version)。policy を含むため、policy 変更は新しい decision を生む。",
+      "$ref": "#/$defs/hash"
+    },
+    "request_id": { "$ref": "#/$defs/identifier" },
+    "policy_id": { "$ref": "#/$defs/identifier" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+
+    "outcome": {
+      "description": "incomplete を human_required に潰してはならない。集計時も別カウントを維持する。",
+      "enum": ["auto_apply", "human_required", "incomplete"]
+    },
+
+    "granted_dimensions": {
+      "description": "outcome=auto_apply のとき、非人間アクターに認められた agency 次元。要求された次元の部分集合であり、上回ることはない(単調な狭まり)。",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/agencyDimension" }
+    },
+
+    "withheld_dimensions": {
+      "description": "要求されたが認められなかった次元。空でない場合、outcome は auto_apply にならない。",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/agencyDimension" }
+    },
+
+    "factors": {
+      "description": "全 factor を必ず列挙する。満たされた factor も省略しない(欠損と満足を区別できなくなるため)。",
+      "type": "array",
+      "minItems": 6,
+      "items": { "$ref": "#/$defs/factorVerdict" }
+    },
+
+    "identity": {
+      "description": "決定の同一性。evidence_state_digest は policy を含まない — この分離が原因帰属を可能にする。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_digest", "evidence_state_digest"],
+      "properties": {
+        "action_digest": { "$ref": "#/$defs/hash" },
+        "evidence_state_digest": { "$ref": "#/$defs/hash" }
+      }
+    },
+
+    "attribution": {
+      "description": "先行 decision と比較した場合のみ存在する。変化原因を切り分けられない場合は unattributable とし、単一原因として提示しない。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compared_to_decision_id", "cause"],
+      "properties": {
+        "compared_to_decision_id": { "$ref": "#/$defs/hash" },
+        "cause": {
+          "enum": ["action_change", "evidence_change", "policy_change", "unattributable", "no_change"]
+        },
+        "changed_components": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["action_digest", "evidence_state_digest", "policy_id", "policy_version"] }
+        },
+        "outcome_transition": {
+          "description": "注目すべき遷移: auto_apply → human_required は境界が締まったことを、逆は緩んだことを意味する。後者は policy_change 以外の原因なら要調査。",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "enum": ["auto_apply", "human_required", "incomplete"] },
+            "to": { "enum": ["auto_apply", "human_required", "incomplete"] }
+          }
+        }
+      }
+    },
+
+    "routing": {
+      "description": "ホストへの助言。カーネルは実行しない。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required_evidence_modes": {
+          "description": "incomplete を解消するために必要な証拠の種別。「次に何を観測すべきか」を必ず返す。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "escalate_to": { "type": "string" }
+      }
+    },
+
+    "computed_at": { "type": "string", "format": "date-time" },
+    "kernel_version": { "$ref": "#/$defs/semver" }
+  },
+
+  "$defs": {
+    "identifier": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._:-]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "hash": { "type": "string", "pattern": "^(sha256|blake3):[0-9a-f]{64}$" },
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "agencyDimension": {
+      "enum": ["observe", "frame", "project", "judge", "authorize", "execute", "learn"]
+    },
+
+    "factorVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factor", "verdict", "reasons"],
+      "properties": {
+        "factor": {
+          "enum": ["applicability", "authority", "evidence", "freshness", "risk", "reversibility"]
+        },
+        "verdict": {
+          "description": "satisfied 以外は必ず reasons を伴う。理由のない制限を出力してはならない。",
+          "enum": ["satisfied", "human_required", "incomplete"]
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "evidence_ids": {
+          "description": "この判定が参照した証拠。空であることは「参照する証拠が無かった」を意味する。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    }
+  }
+}

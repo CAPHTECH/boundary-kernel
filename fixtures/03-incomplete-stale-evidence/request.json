@@ -1,0 +1,45 @@
+{
+  "schema": "rbk.request.v1",
+  "request_id": "req-03-incomplete-stale-evidence",
+  "action": {
+    "action_id": "action-03-adjust-retrieval-k",
+    "action_kind": "rag.config_change",
+    "domain": "assay-kit",
+    "summary": "Increase retrieval top-k from 5 to 8",
+    "proposed_by": {
+      "actor_id": "agent-assay",
+      "actor_kind": "ai_agent",
+      "model": "claude-sonnet-5"
+    },
+    "requested_dimensions": ["project", "execute"],
+    "reversibility": "reversible",
+    "risk": {
+      "impact": "low",
+      "exposure": 0.1,
+      "uncertainty": 0.1,
+      "rationale": "Config change is a single reversible parameter edit"
+    },
+    "applicability": {
+      "status": "applicable"
+    },
+    "digest": "sha256:9bbec0d107e645444143a9d1d0c8a294dc57cd256ecffeaf82b86becf662e141"
+  },
+  "evidence_state": {
+    "items": [
+      {
+        "evidence_id": "ev-03-eval-run",
+        "mode": "executable_test",
+        "outcome": "passed",
+        "assurance": "runtime_observed",
+        "freshness": {
+          "status": "stale",
+          "reasons": ["target_changed"],
+          "observed_at": "2026-08-08T12:00:00Z"
+        },
+        "produced_by": "assay-kit-eval-runner"
+      }
+    ],
+    "digest": "sha256:246b152e756b1c366e1f25451a4800e896b01a185cb68fc084dbe52d2e444595"
+  },
+  "observed_at": "2026-08-09T11:00:00Z"
+}

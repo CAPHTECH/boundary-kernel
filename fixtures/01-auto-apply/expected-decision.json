@@ -1,0 +1,25 @@
+{
+  "schema": "rbk.decision.v1",
+  "decision_id": "sha256:14fa905a21125f6a956a4f056b556d89867a7a947c4a322e45abea870ccb6d0b",
+  "request_id": "req-01-auto-apply",
+  "policy_id": "code-patch-default",
+  "policy_version": "1.0.0",
+  "outcome": "auto_apply",
+  "granted_dimensions": ["project", "execute"],
+  "withheld_dimensions": [],
+  "factors": [
+    { "factor": "applicability", "verdict": "satisfied", "reasons": [] },
+    { "factor": "authority", "verdict": "satisfied", "reasons": [] },
+    { "factor": "evidence", "verdict": "satisfied", "reasons": [], "evidence_ids": ["ev-01-test"] },
+    { "factor": "freshness", "verdict": "satisfied", "reasons": [], "evidence_ids": ["ev-01-test"] },
+    { "factor": "risk", "verdict": "satisfied", "reasons": [] },
+    { "factor": "reversibility", "verdict": "satisfied", "reasons": [] }
+  ],
+  "identity": {
+    "action_digest": "sha256:8b1bf74ad28fc10cce5cc14966f38e4ffd0a493385c9855ce4d5677b7157a6fb",
+    "evidence_state_digest": "sha256:a5dc3b98234d1292642406777f7ceb30f538b2ec1265c47e8abcaf8ef401fbae"
+  },
+  "routing": {},
+  "computed_at": "2026-08-09T09:05:01Z",
+  "kernel_version": "0.1.0"
+}

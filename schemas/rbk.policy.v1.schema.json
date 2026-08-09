@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caph.tech/schemas/rbk.policy.v1.schema.json",
+  "title": "Review Boundary Policy v1",
+  "description": "境界計算の上限(ceiling)。各 factor はこの上限を緩めることはできず、狭めることのみができる。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "policy_id",
+    "version",
+    "scope",
+    "authority",
+    "evidence",
+    "freshness",
+    "risk",
+    "reversibility"
+  ],
+  "properties": {
+    "schema": { "const": "rbk.policy.v1" },
+    "policy_id": { "$ref": "#/$defs/identifier" },
+    "version": { "$ref": "#/$defs/semver" },
+    "description": { "type": "string" },
+
+    "scope": {
+      "description": "この policy が適用される行為の範囲。範囲外の request は applicability=not_applicable となり、決して auto_apply にならない。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_kinds"],
+      "properties": {
+        "action_kinds": {
+          "description": "自由語彙。ホスト側の行為種別(例: code.patch, rag.config_change, gatekeeper.side_effect)",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "domains": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+
+    "authority": {
+      "description": "非人間アクターが保持してよい agency 次元の上限。ここに無い次元を要求する行為は human_required となる。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["non_human_may_hold"],
+      "properties": {
+        "non_human_may_hold": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/agencyDimension" }
+        },
+        "human_reserved": {
+          "description": "明示的に人間専有とする次元。既定で U(authorize) は人間専有として扱われ、ここに non_human_may_hold へ U を入れる場合は authorize_delegation_rationale が必須。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/agencyDimension" }
+        },
+        "authorize_delegation_rationale": {
+          "description": "U(授権)を非人間へ委譲する場合に必須。責任の所在を明示しない委譲を防ぐ。",
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+
+    "evidence": {
+      "description": "自動適用に要求する証拠の下限。reviewgraphen evidenceRequirement と互換。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "accepted_modes"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "accepted_modes": {
+          "description": "自由語彙(例: executable_test, static_verification, human_reasoned_decision, runtime_trace)。LLM 判定のみを受理する場合もここに明示させる。",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "minimum_count": { "type": "integer", "minimum": 0, "default": 1 },
+        "minimum_assurance": {
+          "description": "受理する最低の保証境界。measurement は proved と同一視されない(測候方法論 §3.4)。",
+          "$ref": "#/$defs/assuranceLevel"
+        }
+      }
+    },
+
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["require_fresh"],
+      "properties": {
+        "require_fresh": {
+          "description": "true の場合、stale または unknown な証拠は auto_apply を支持できない。",
+          "type": "boolean"
+        },
+        "max_age_seconds": { "type": "integer", "minimum": 0 },
+        "tolerated_staleness_reasons": {
+          "description": "この理由による stale は許容する(例: extractor_changed は許容するが target_changed は許容しない)。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/stalenessReason" }
+        }
+      }
+    },
+
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_impact"],
+      "properties": {
+        "max_impact": {
+          "description": "自動適用を許す最大の影響度。これを超えたら human_required。",
+          "$ref": "#/$defs/severity"
+        },
+        "max_exposure": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "max_uncertainty": {
+          "description": "不確実性の上限。超過は human_required ではなく incomplete として扱う(判断できないため)。",
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+
+    "reversibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum"],
+      "properties": {
+        "minimum": {
+          "description": "自動適用を許す最低の可逆性。irreversible を許可することはできない(Rollback Fiction の禁止)。",
+          "enum": ["reversible", "compensatable"]
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "identifier": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._:-]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "severity": { "enum": ["none", "low", "medium", "high", "critical"] },
+    "agencyDimension": {
+      "description": "GAE 操作的アクター性ベクトル ⟨O,F,P,J,U,E,L⟩",
+      "enum": ["observe", "frame", "project", "judge", "authorize", "execute", "learn"]
+    },
+    "assuranceLevel": {
+      "description": "測候方法論 §3.4 保証境界。上位ほど強い。evaluator_supported を proved と表示してはならない。",
+      "enum": [
+        "runtime_observed",
+        "evaluator_supported",
+        "statistically_supported",
+        "bounded_checked",
+        "formal_verified"
+      ]
+    },
+    "stalenessReason": {
+      "description": "reviewgraphen docs/12 §9 の 12 分類",
+      "enum": [
+        "target_changed",
+        "dependency_changed",
+        "context_changed",
+        "evidence_changed",
+        "test_changed",
+        "policy_changed",
+        "rule_changed",
+        "extractor_changed",
+        "model_policy_changed",
+        "decision_expired",
+        "runtime_evidence_expired",
+        "mapping_unresolved"
+      ]
+    }
+  }
+}

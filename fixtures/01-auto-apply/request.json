@@ -1,0 +1,44 @@
+{
+  "schema": "rbk.request.v1",
+  "request_id": "req-01-auto-apply",
+  "action": {
+    "action_id": "action-01-fix-pagination",
+    "action_kind": "code.patch",
+    "domain": "reviewgraphen",
+    "summary": "Fix off-by-one error in pagination loop",
+    "proposed_by": {
+      "actor_id": "agent-fixit",
+      "actor_kind": "ai_agent",
+      "model": "claude-sonnet-5"
+    },
+    "requested_dimensions": ["project", "execute"],
+    "reversibility": "reversible",
+    "risk": {
+      "impact": "low",
+      "exposure": 0.1,
+      "uncertainty": 0.05,
+      "rationale": "Single-line fix covered by existing test suite"
+    },
+    "applicability": {
+      "status": "applicable"
+    },
+    "digest": "sha256:8b1bf74ad28fc10cce5cc14966f38e4ffd0a493385c9855ce4d5677b7157a6fb"
+  },
+  "evidence_state": {
+    "items": [
+      {
+        "evidence_id": "ev-01-test",
+        "mode": "executable_test",
+        "outcome": "passed",
+        "assurance": "runtime_observed",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-08-09T09:00:00Z"
+        },
+        "produced_by": "ci-runner"
+      }
+    ],
+    "digest": "sha256:a5dc3b98234d1292642406777f7ceb30f538b2ec1265c47e8abcaf8ef401fbae"
+  },
+  "observed_at": "2026-08-09T09:05:00Z"
+}

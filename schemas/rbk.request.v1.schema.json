@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caph.tech/schemas/rbk.request.v1.schema.json",
+  "title": "Review Boundary Request v1",
+  "description": "境界計算の入力。行為(action)と、その行為を支える証拠の状態(evidence_state)。測定も生成もここでは行わない — 結果だけを受け取る。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "request_id", "action", "evidence_state"],
+  "properties": {
+    "schema": { "const": "rbk.request.v1" },
+    "request_id": { "$ref": "#/$defs/identifier" },
+
+    "action": {
+      "description": "判定対象の行為。誰が何をしようとしているか。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "action_kind",
+        "proposed_by",
+        "requested_dimensions",
+        "reversibility",
+        "risk"
+      ],
+      "properties": {
+        "action_id": { "$ref": "#/$defs/identifier" },
+        "action_kind": { "$ref": "#/$defs/nonEmptyString" },
+        "domain": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "type": "string" },
+
+        "proposed_by": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actor_id", "actor_kind"],
+          "properties": {
+            "actor_id": { "$ref": "#/$defs/nonEmptyString" },
+            "actor_kind": {
+              "description": "human 以外はすべて非人間として扱う。deterministic であっても人間専有次元は持てない。",
+              "enum": ["human", "ai_agent", "deterministic", "unknown"]
+            },
+            "model": { "type": "string" }
+          }
+        },
+
+        "requested_dimensions": {
+          "description": "この行為の適用が要求する agency 次元。少なくとも1つ必要。",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/agencyDimension" }
+        },
+
+        "reversibility": {
+          "description": "unknown を reversible として扱ってはならない。",
+          "enum": ["reversible", "compensatable", "irreversible", "unknown"]
+        },
+
+        "risk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["impact"],
+          "properties": {
+            "impact": { "$ref": "#/$defs/severity" },
+            "exposure": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "uncertainty": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "structural_reach": { "type": "number", "minimum": 0.0 },
+            "rationale": { "type": "string" }
+          }
+        },
+
+        "applicability": {
+          "description": "ホスト側が既に適用可能性を判定している場合に渡す。capability_missing を not_applicable と混同しないこと。",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["applicable", "not_applicable", "capability_missing", "unknown"] },
+            "reasons": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+
+        "digest": {
+          "description": "行為内容の content hash。同一性の帰属に使う。省略時はカーネルが canonical JSON から算出する。",
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+
+    "evidence_state": {
+      "description": "この行為を支える証拠の現況。空配列は「証拠なし」を意味し、欠損として扱われる(省略と同義にしない)。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceItem" }
+        },
+        "digest": {
+          "description": "証拠状態のみの content hash。policy を含めてはならない(policy 変更で evidence digest が変わると原因帰属ができなくなる)。",
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+
+    "human_admission": {
+      "description": "認証済み人間の権限をホストが注入する場合のみ存在する。カーネルはこれを検証せず、存在を信頼する(認証はホストの責務)。存在しないことを人間不在の証拠として扱う。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "authority"],
+      "properties": {
+        "actor": {
+          "description": "human: 接頭辞を必須とする(reviewgraphen TrustedHumanAdmission と同じ規律)。",
+          "type": "string",
+          "pattern": "^human:.+"
+        },
+        "authority": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+
+    "observed_at": {
+      "description": "この request を構成した時刻。freshness 判定の基準。",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+
+  "$defs": {
+    "identifier": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._:-]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "hash": { "type": "string", "pattern": "^(sha256|blake3):[0-9a-f]{64}$" },
+    "severity": { "enum": ["none", "low", "medium", "high", "critical"] },
+    "agencyDimension": {
+      "enum": ["observe", "frame", "project", "judge", "authorize", "execute", "learn"]
+    },
+    "assuranceLevel": {
+      "enum": [
+        "runtime_observed",
+        "evaluator_supported",
+        "statistically_supported",
+        "bounded_checked",
+        "formal_verified"
+      ]
+    },
+    "stalenessReason": {
+      "enum": [
+        "target_changed",
+        "dependency_changed",
+        "context_changed",
+        "evidence_changed",
+        "test_changed",
+        "policy_changed",
+        "rule_changed",
+        "extractor_changed",
+        "model_policy_changed",
+        "decision_expired",
+        "runtime_evidence_expired",
+        "mapping_unresolved"
+      ]
+    },
+
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "mode", "outcome", "assurance", "freshness"],
+      "properties": {
+        "evidence_id": { "$ref": "#/$defs/identifier" },
+        "mode": {
+          "description": "policy の accepted_modes と突き合わせる自由語彙。",
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "outcome": {
+          "description": "inconclusive を passed 側に丸めてはならない。",
+          "enum": ["passed", "failed", "inconclusive"]
+        },
+        "assurance": {
+          "description": "この証拠が主張できる保証の強さ。LLM 判定は evaluator_supported であり、それ以上を名乗ってはならない。",
+          "$ref": "#/$defs/assuranceLevel"
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["fresh", "stale", "unknown"] },
+            "reasons": {
+              "description": "stale の理由。status=stale で reasons が空なら、カーネルは理由不明として incomplete 方向に扱う。",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/stalenessReason" }
+            },
+            "observed_at": { "type": "string", "format": "date-time" }
+          }
+        },
+        "produced_by": { "type": "string" }
+      }
+    }
+  }
+}

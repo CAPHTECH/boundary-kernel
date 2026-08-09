@@ -1,0 +1,33 @@
+{
+  "schema": "rbk.policy.v1",
+  "policy_id": "rag-config-change-default",
+  "version": "1.0.0",
+  "description": "Default policy for RAG evaluation config-change actions",
+  "scope": {
+    "action_kinds": ["rag.config_change"],
+    "domains": ["assay-kit"]
+  },
+  "authority": {
+    "non_human_may_hold": ["observe", "frame", "project", "judge", "execute"],
+    "human_reserved": ["authorize", "learn"]
+  },
+  "evidence": {
+    "required": true,
+    "accepted_modes": ["executable_test", "static_verification"],
+    "minimum_count": 1,
+    "minimum_assurance": "runtime_observed"
+  },
+  "freshness": {
+    "require_fresh": true,
+    "max_age_seconds": 3600,
+    "tolerated_staleness_reasons": ["extractor_changed"]
+  },
+  "risk": {
+    "max_impact": "medium",
+    "max_exposure": 0.5,
+    "max_uncertainty": 0.3
+  },
+  "reversibility": {
+    "minimum": "reversible"
+  }
+}

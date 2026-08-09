@@ -1,0 +1,44 @@
+{
+  "schema": "rbk.request.v1",
+  "request_id": "req-04-human-required-risk",
+  "action": {
+    "action_id": "action-04-migrate-auth-schema",
+    "action_kind": "code.patch",
+    "domain": "reviewgraphen",
+    "summary": "Rewrite auth middleware session-token storage schema",
+    "proposed_by": {
+      "actor_id": "agent-fixit",
+      "actor_kind": "ai_agent",
+      "model": "claude-sonnet-5"
+    },
+    "requested_dimensions": ["project", "execute"],
+    "reversibility": "reversible",
+    "risk": {
+      "impact": "critical",
+      "exposure": 0.4,
+      "uncertainty": 0.2,
+      "rationale": "Touches production auth session storage for all users"
+    },
+    "applicability": {
+      "status": "applicable"
+    },
+    "digest": "sha256:90625e78e9f8211b7e7e40963ea94a906685f3c7cff5278ebc782234c23260f4"
+  },
+  "evidence_state": {
+    "items": [
+      {
+        "evidence_id": "ev-04-test",
+        "mode": "executable_test",
+        "outcome": "passed",
+        "assurance": "runtime_observed",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-08-09T12:00:00Z"
+        },
+        "produced_by": "ci-runner"
+      }
+    ],
+    "digest": "sha256:50ffd0d6d287bf78d8fcc4af2d2ef51199749105093a9fb3e24ba0d575d7dd57"
+  },
+  "observed_at": "2026-08-09T12:05:00Z"
+}
