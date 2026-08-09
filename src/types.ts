@@ -1,5 +1,6 @@
 /**
- * Types derived from schemas/rbk.{policy,request,decision}.v1.schema.json.
+ * Types derived from schemas/rbk.policy.v1, rbk.request.v1 and
+ * rbk.decision.v2 (the decision schema was broken to v2 in kernel v0.2).
  *
  * Every union below mirrors the corresponding schema `enum` exactly. If a
  * schema enum changes, this file is the single place that must change with it.
@@ -230,7 +231,7 @@ export interface Request {
 }
 
 // ---------------------------------------------------------------------------
-// rbk.decision.v1
+// rbk.decision.v2
 // ---------------------------------------------------------------------------
 
 export type Outcome = 'auto_apply' | 'human_required' | 'incomplete';
