@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caph.tech/schemas/rbk.ledger_entry.v1.schema.json",
+  "title": "Agency Ledger Entry v1",
+  "description": "追記専用台帳の1行 = 1判断。台帳は観測であって判定ではない — decide() の出力 (rbk.decision.v3) をそのまま埋め込み、その周りに「いつ要求され、いつ台帳に載ったか」と「どの行為だったか(人間が読める識別)」を足すだけの封筒である。decision の中身を台帳側で作り替えることはしない。過去行は書き換えない: 訂正は record_kind=correction の新しい行で、supersedes によって前の行を指す形で表現する。時刻を必ず持つのは、三値化がスループット(滞留時間)に与える影響が未計測であり、後から測れる形で残す必要があるため(製品文書の限界2)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "ledger_id", "seq", "record_kind", "recorded_at", "action", "decision"],
+  "properties": {
+    "schema": { "const": "rbk.ledger_entry.v1" },
+
+    "ledger_id": {
+      "description": "この行が属する台帳の識別子。全行で同一でなければならない(読み出し側が検査する)。2つの台帳を連結すると seq の単調性が黙って壊れるため、それを検出可能にするために持つ。",
+      "$ref": "#/$defs/identifier"
+    },
+
+    "seq": {
+      "description": "台帳内の連番。0 以上で、行順に狭義単調増加する。追記専用性の構造的な現れであり、行の同一性でもある(decision_id は同じ入力なら再計算で同じ値になるので、行を一意に指せない)。supersedes はこの seq を指す。",
+      "type": "integer",
+      "minimum": 0
+    },
+
+    "record_kind": {
+      "description": "decision = 新しい判断の記録。correction = 既存行の封筒(要求時刻・行為の識別・授権者・注記)の訂正。訂正であっても過去行は消さず、新しい行として積む。",
+      "enum": ["decision", "correction"]
+    },
+
+    "recorded_at": {
+      "description": "この行を台帳に書いた時刻。判断時刻ではない(判断時刻は decision.computed_at)。両者の差は台帳への反映遅れであり、滞留時間とは別の量である。",
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "requested_at": {
+      "description": "この行為が要求された時刻。任意 — ホストが持っていない場合がある。滞留時間 = decision.computed_at − requested_at はここからしか出せないので、出せるなら必ず入れる。入っていない行は集計側で「未計測」として別に数える(計測できた母集団に混ぜない)。",
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "action": {
+      "description": "行為の人間可読な識別。decision は action を content hash でしか持たない(identity.action_digest)ため、後から「どの行為だったか」を復元するにはここが要る。digest は同一性のため、こちらは可読性のためであり、役割が違う。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "action_kind", "proposed_by"],
+      "properties": {
+        "action_id": { "$ref": "#/$defs/identifier" },
+        "action_kind": { "$ref": "#/$defs/nonEmptyString" },
+        "domain": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "proposed_by": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actor_id", "actor_kind"],
+          "properties": {
+            "actor_id": { "$ref": "#/$defs/nonEmptyString" },
+            "actor_kind": { "enum": ["human", "ai_agent", "deterministic", "unknown"] },
+            "model": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+
+    "human_admission": {
+      "description": "人間の授権者(いれば)。U(授権)を誰が握っていたかを後から復元するために残す。カーネルはこれを判定に使わない — 台帳が記録するのは、判断の周辺で誰が権限を持っていたかという事実である。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "authority"],
+      "properties": {
+        "actor": { "type": "string", "pattern": "^human:.+" },
+        "authority": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+
+    "decision": {
+      "description": "decide() の出力そのもの。射影(必要な数フィールドだけ抜き出したもの)にはしない — 抜き出す判断を台帳側が持つと、契約が2箇所に分かれて必ず食い違う。outcome / basis_complete / 6 factor の verdict と reasons / 同一性 / 「次に何を観測すべきか」(routing.required_evidence_modes)は、すべて decision 側の契約が既に必須にしている。",
+      "$ref": "https://caph.tech/schemas/rbk.decision.v3.schema.json"
+    },
+
+    "supersedes": {
+      "description": "訂正が置き換える行。record_kind=correction のときのみ存在し、必ず存在する。指す先は自分より前の seq でなければならず、その行の decision_id と自分の decision_id は一致していなければならない(読み出し側が検査する) — 訂正できるのは封筒であって、カーネルが出した判断ではない。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "reason"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 0 },
+        "reason": {
+          "description": "なぜ訂正するか。理由のない訂正は履歴を壊すだけなので必須にする(理由のない制限を出力しない、と同じ規律)。",
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+
+    "note": {
+      "description": "自由記述。集計はしない。",
+      "$ref": "#/$defs/nonEmptyString"
+    }
+  },
+
+  "allOf": [
+    {
+      "$comment": "訂正は何を訂正するのかを必ず指す。",
+      "if": {
+        "required": ["record_kind"],
+        "properties": { "record_kind": { "const": "correction" } }
+      },
+      "then": { "required": ["supersedes"] }
+    },
+    {
+      "$comment": "逆に、新しい判断の記録は何も置き換えない。証拠が増えて判断し直した場合はそれ自体が新しい判断であり、前の判断を無効にするわけではない。",
+      "if": {
+        "required": ["record_kind"],
+        "properties": { "record_kind": { "const": "decision" } }
+      },
+      "then": { "not": { "required": ["supersedes"] } }
+    }
+  ],
+
+  "$defs": {
+    "identifier": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._:-]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 }
+  }
+}

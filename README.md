@@ -50,6 +50,30 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 
 詳細な設計根拠は [`docs/00_design.md`](docs/00_design.md) にあります。
 
+## Agency Ledger-lite — 判断を追記専用の台帳に残す
+
+判断は出した瞬間から履歴になります。1行 = 1判断の **追記専用 JSONL** に積むのが `rbk.ledger_entry.v1` と `src/ledger.ts` です([設計 §8](docs/00_design.md))。
+
+```ts
+const entry = recordDecision(request, decision, {
+  ledger_id: 'caphtech-self',
+  seq: 42,
+  recorded_at: new Date().toISOString(),
+  requested_at: '2026-08-09T09:00:00Z', // 分かるなら必ず入れる
+});
+appendFileSync('ledger.jsonl', serializeEntry(entry)); // I/O はホスト側
+```
+
+**台帳は観測であって判定ではありません。** `decide()` の出力をそのまま埋め込み、周りに時刻と行為の可読な識別を足すだけです。`decision_id` の定義も二軸の規則も台帳側では変えません。decision を射影(数フィールドだけ抜き出したもの)にしないのは、抜き出す判断を台帳が持てば契約が2箇所に分かれて必ず食い違うからです。`outcome` と `basis_complete` は**別のフィールドのまま**記録され、集計でも別々に数えます。
+
+**追記専用性は構造です。** `seq` は狭義単調増加し、行の書き換えは連番の重複・巻き戻しとして現れて `readLedger()` に拒否されます。訂正は新しい行(`record_kind: 'correction'` + `supersedes` + 理由)で表現し、訂正された行は残ります。訂正できるのは封筒(要求時刻・行為の識別・授権者・注記)だけで、**カーネルが出した decision は訂正できません** — 訂正行は元の行と同じ `decision_id` を持たなければなりません。
+
+**時刻を必ず持つのは、まだ答えを持っていない問いのためです。** 三値化がスループットに与える影響を一度も測っていません(「厳格にしたら遅くなるのでは」に現在答えられません)。滞留時間 = `decision.computed_at − requested_at` は台帳からしか出せないので、いま残しておかなければ後から測れません。`requested_at` の無い行は集計で**未計測として別に数えます** — 計測できた母集団に混ぜれば、部分的な計測を完全な計測として提示することになります。
+
+`summarize()` が返すもの: outcome 別の件数(三値を潰さない)/ 基盤欠損の件数(routing に関わらず数えるので `incomplete` の上位集合)/ どの factor が欠損を報告したか / 「次に何を観測すべきか」の内訳 / 滞留時間(全体と outcome 別、未計測件数つき)。
+
+⚠️ 「次に観測すべきこと」の一覧は**あと少しで承認できる案件の待ち行列ではありません**。欠けた観測が埋まった結果 `human_required` になることは普通に起きます。示しているのは達成可能性ではなく、計算不能を解消する手段です。
+
 ## 何をしないか
 
 - ❌ **品質を測定しない** — テスト結果や静的解析の結果は入力であって、RBK が生成するものではありません
@@ -64,11 +88,11 @@ artifact 非依存です。コードレビューの自動マージ、RAG 評価�
 必要なもの: Node.js 22+(TypeScript を直接実行するため)、Python 3 と `jsonschema`(スキーマ検証のため)。
 
 ```bash
-# TypeScript 参照実装 (tsc --noEmit + node:test, 155 テスト)
+# TypeScript 参照実装 (tsc --noEmit + node:test, 190 テスト)
 npm install
 npm test
 
-# スキーマと fixtures の整合性検査 (61 チェック)
+# スキーマと fixtures の整合性検査 (76 チェック)
 pip install jsonschema
 python3 validate.py
 
@@ -81,10 +105,10 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | ディレクトリ | 内容 |
 |---|---|
 | `docs/00_design.md` | 設計正本。三値の非対称性と routing / measurement の二軸、factor の由来、同一性と帰属の規律。 |
-| `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v3`(JSON Schema Draft 2020-12)。 |
-| `fixtures/` | 5シナリオ。`auto_apply` / 権限の留保 / 証拠の陳腐化による `incomplete` / リスク超過による `human_required` / **`human_required` と基盤欠損の同時成立**。各 `policy.json` + `request.json` + `expected-decision.json`。 |
-| `src/` | TypeScript 参照実装。ランタイム依存ゼロ。`decide()` は**同期の純関数**で、digest は引数で受け取るため crypto に依存しません。 |
-| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(policy を content hash で縛ること)、digest の決定論性と集合の順序非依存、変化の帰属。 |
+| `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v3` / `rbk.ledger_entry.v1`(JSON Schema Draft 2020-12)。 |
+| `fixtures/` | 5シナリオ。`auto_apply` / 権限の留保 / 証拠の陳腐化による `incomplete` / リスク超過による `human_required` / **`human_required` と基盤欠損の同時成立**。各 `policy.json` + `request.json` + `expected-decision.json`。加えて `ledger/ledger.jsonl`(5シナリオを台帳に積み、1件を訂正した6行)。 |
+| `src/` | TypeScript 参照実装。ランタイム依存ゼロ。`decide()` は**同期の純関数**で、digest は引数で受け取るため crypto に依存しません。`ledger.ts` は台帳の読み書きと集計(ファイル I/O は持ちません)。 |
+| `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(policy を content hash で縛ること)、digest の決定論性と集合の順序非依存、変化の帰属、台帳の追記専用性と集計。 |
 | `experiments/herdr-approvals/` | 実地テスト(下記)。 |
 
 `validate.py` はスキーマだけでは強制できない不変条件も検査します — 非 `satisfied` に理由があるか、routing 規則が守られているか、`basis_complete` が factor の連言になっているか、二軸の同値(`outcome == incomplete` ⟺ 基盤欠損かつ `human_required` 無し)が成り立つか、`auto_apply` なら留保次元が空か、など。加えて、decision スキーマが**受理してはならない**インスタンス(factor の重複・7件目・欠落)を実際に投げて拒否されることを確認します — 「6種を1回ずつ」は description の主張ではなく制約として書かれています。

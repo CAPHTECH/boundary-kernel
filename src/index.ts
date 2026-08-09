@@ -22,6 +22,21 @@ export {
   decisionIdPreimage,
   type DecisionIdInput,
 } from './digest.ts';
+export {
+  recordDecision,
+  recordCorrection,
+  serializeEntry,
+  serializeLedger,
+  readLedger,
+  summarize,
+  waitedSeconds,
+  type Correctable,
+  type CorrectionOptions,
+  type LatencyStats,
+  type LedgerSummary,
+  type QueueLatency,
+  type RecordOptions,
+} from './ledger.ts';
 export { canonicalJson, type JsonValue } from './canonical.ts';
 export {
   nfcDeep,

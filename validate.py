@@ -20,6 +20,16 @@ Checks:
            <=> basis_complete == false and no factor is human_required.
        (f) outcome == auto_apply implies withheld_dimensions is empty.
        (g) granted_dimensions is a subset of the request's requested_dimensions.
+  4. fixtures/ledger/ledger.jsonl validates line-by-line against
+     rbk.ledger_entry.v1, and the append-only invariants that no single line
+     can carry hold across the file:
+       (h) one ledger_id for the whole file.
+       (i) seq strictly increasing — a rewritten line is what a repeated or
+           rewound sequence number looks like.
+       (j) a correction supersedes an earlier line and carries that line's
+           decision_id; the envelope may be restated, the decision may not.
+       (k) requested_at never falls after the decision's computed_at, so a
+           later latency figure cannot come out negative.
 
 Usage:
     python3 validate.py
@@ -36,6 +46,7 @@ from pathlib import Path
 try:
     import jsonschema
     from jsonschema.validators import validator_for
+    from referencing import Registry, Resource
 except ImportError:
     print(
         "error: the 'jsonschema' package is required.\n"
@@ -53,6 +64,13 @@ SCHEMA_FILES = {
     "request": SCHEMAS_DIR / "rbk.request.v1.schema.json",
     "expected-decision": SCHEMAS_DIR / "rbk.decision.v3.schema.json",
 }
+
+# The ledger schema is validated like the others but is not part of a fixture
+# scenario triple: a scenario is (policy, request, decision), and the ledger is
+# a separate artifact that *records* decisions.
+LEDGER_SCHEMA_FILE = SCHEMAS_DIR / "rbk.ledger_entry.v1.schema.json"
+LEDGER_FILE = FIXTURES_DIR / "ledger" / "ledger.jsonl"
+LEDGER_DIR_NAME = "ledger"
 
 ALL_FACTORS = {
     "applicability",
@@ -104,8 +122,10 @@ def check_schema_is_valid_2020_12(name, path):
     return schema
 
 
-def check_instance(label, instance, schema):
-    validator = jsonschema.Draft202012Validator(schema)
+def check_instance(label, instance, schema, registry=None):
+    validator = jsonschema.Draft202012Validator(
+        schema, **({"registry": registry} if registry is not None else {})
+    )
     errors = sorted(validator.iter_errors(instance), key=lambda e: list(e.path))
     if errors:
         for e in errors:
@@ -258,14 +278,125 @@ def check_granted_subset_of_requested(label, decision, request):
     return True
 
 
-def check_schema_rejects(label, instance, schema):
+def check_schema_rejects(label, instance, schema, registry=None):
     """The mirror image of check_instance: the schema must *reject* this."""
-    validator = jsonschema.Draft202012Validator(schema)
+    validator = jsonschema.Draft202012Validator(
+        schema, **({"registry": registry} if registry is not None else {})
+    )
     if next(validator.iter_errors(instance), None) is None:
         fail(label, "the schema accepted an instance it claims to forbid")
         return False
     ok(label)
     return True
+
+
+def parse_iso(value):
+    """Minimal RFC 3339 parse, enough to order two timestamps."""
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def check_ledger_invariants(entries):
+    """Invariants that live across lines, not within one (checks h–k).
+
+    The per-line contract is the ledger schema's job; these are the ones that
+    only exist once the file is read as a sequence.
+    """
+    ledger_ids = {e.get("ledger_id") for e in entries}
+    label = "ledger: one ledger_id for the whole file"
+    if len(ledger_ids) > 1:
+        fail(label, f"mixed ledger_ids {sorted(str(i) for i in ledger_ids)}")
+    else:
+        ok(label)
+
+    label = "ledger: seq strictly increasing (append-only)"
+    seqs = [e.get("seq") for e in entries]
+    if any(b is None or a is None or b <= a for a, b in zip(seqs, seqs[1:])):
+        fail(label, f"seq sequence is not strictly increasing: {seqs}")
+    else:
+        ok(label)
+
+    label = "ledger: a correction supersedes an earlier line, and only its envelope"
+    problems = []
+    seen = {}
+    for e in entries:
+        seq = e.get("seq")
+        kind = e.get("record_kind")
+        supersedes = e.get("supersedes")
+        if kind == "correction":
+            target = seen.get((supersedes or {}).get("seq"))
+            if target is None:
+                problems.append(f"seq {seq}: supersedes a line that does not precede it")
+            elif target["decision"]["decision_id"] != e["decision"]["decision_id"]:
+                problems.append(
+                    f"seq {seq}: supersedes seq {supersedes['seq']} but carries a different "
+                    f"decision_id — a correction may restate the envelope, never the decision"
+                )
+        elif supersedes is not None:
+            problems.append(f"seq {seq}: record_kind 'decision' must not supersede anything")
+        seen[seq] = e
+    if problems:
+        fail(label, "; ".join(problems))
+    else:
+        ok(label)
+
+    label = "ledger: requested_at never falls after the decision's computed_at"
+    problems = []
+    for e in entries:
+        if "requested_at" not in e:
+            continue
+        requested = parse_iso(e["requested_at"])
+        decided = parse_iso(e["decision"]["computed_at"])
+        if requested is None or decided is None:
+            problems.append(f"seq {e.get('seq')}: unparsable timestamp")
+        elif requested > decided:
+            problems.append(
+                f"seq {e.get('seq')}: requested_at {e['requested_at']} is after "
+                f"computed_at {e['decision']['computed_at']}"
+            )
+    if problems:
+        fail(label, "; ".join(problems))
+    else:
+        ok(label)
+
+    label = "ledger: both axes are recorded, neither collapsed into the other"
+    problems = []
+    for e in entries:
+        decision = e.get("decision", {})
+        if "outcome" not in decision or "basis_complete" not in decision:
+            problems.append(
+                f"seq {e.get('seq')}: the entry does not carry both outcome (routing) and "
+                f"basis_complete (measurement)"
+            )
+    if problems:
+        fail(label, "; ".join(problems))
+    else:
+        ok(label)
+
+
+def check_ledger_schema_claims_are_enforced(entry, schema, registry):
+    """The ledger schema says a correction points at what it corrects, and that
+    a plain decision replaces nothing. Both are if/then constraints, so probe
+    them with instances they must reject."""
+    orphan = {k: v for k, v in entry.items() if k != "supersedes"}
+    orphan["record_kind"] = "correction"
+    check_schema_rejects(
+        "schema[ledger_entry] rejects a correction with no supersedes", orphan, schema, registry
+    )
+
+    replacing = {**entry, "record_kind": "decision", "supersedes": {"seq": 0, "reason": "x"}}
+    check_schema_rejects(
+        "schema[ledger_entry] rejects a decision that supersedes a line", replacing, schema, registry
+    )
+
+    unreasoned = {**entry, "record_kind": "correction", "supersedes": {"seq": 0}}
+    check_schema_rejects(
+        "schema[ledger_entry] rejects a correction with no reason", unreasoned, schema, registry
+    )
 
 
 def check_factors_claim_is_enforced(decision, schema):
@@ -295,6 +426,7 @@ def main():
     schemas = {}
     for name, path in SCHEMA_FILES.items():
         schemas[name] = check_schema_is_valid_2020_12(name, path)
+    schemas["ledger_entry"] = check_schema_is_valid_2020_12("ledger_entry", LEDGER_SCHEMA_FILE)
 
     if any(s is None for s in schemas.values()):
         print_report()
@@ -308,6 +440,8 @@ def main():
 
     for scenario_dir in sorted(p for p in FIXTURES_DIR.iterdir() if p.is_dir()):
         name = scenario_dir.name
+        if name == LEDGER_DIR_NAME:
+            continue
         instances = {}
         for kind, schema_path in SCHEMA_FILES.items():
             fpath = scenario_dir / f"{kind}.json"
@@ -344,8 +478,47 @@ def main():
             print("\n== Probing the decision schema with instances it must reject ==")
             check_factors_claim_is_enforced(decision, schemas["expected-decision"])
 
+    validate_ledger(schemas)
+
     print_report()
     sys.exit(1 if FAILURES else 0)
+
+
+def validate_ledger(schemas):
+    print("\n== Validating the ledger (rbk.ledger_entry.v1) ==")
+    if not LEDGER_FILE.exists():
+        fail("ledger", f"file not found: {LEDGER_FILE}")
+        return
+
+    # A ledger entry embeds a whole decision by $ref, so the decision schema has
+    # to be resolvable by its $id.
+    decision_schema = schemas["expected-decision"]
+    registry = Registry().with_resources(
+        [(decision_schema["$id"], Resource.from_contents(decision_schema))]
+    )
+    ledger_schema = schemas["ledger_entry"]
+
+    entries = []
+    for lineno, raw in enumerate(LEDGER_FILE.read_text(encoding="utf-8").split("\n"), start=1):
+        if not raw.strip():
+            continue
+        label = f"ledger line {lineno} schema"
+        try:
+            entry = json.loads(raw)
+        except Exception as e:
+            fail(label, f"could not parse JSON: {e}")
+            continue
+        if check_instance(label, entry, ledger_schema, registry):
+            entries.append(entry)
+
+    if not entries:
+        fail("ledger", "no valid entries to check invariants against")
+        return
+
+    check_ledger_invariants(entries)
+
+    print("\n== Probing the ledger schema with instances it must reject ==")
+    check_ledger_schema_claims_are_enforced(entries[0], ledger_schema, registry)
 
 
 def print_report():

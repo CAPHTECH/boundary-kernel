@@ -354,3 +354,53 @@ export interface RequestDigests {
   action_digest: Hash;
   evidence_state_digest: Hash;
 }
+
+// ---------------------------------------------------------------------------
+// rbk.ledger_entry.v1
+// ---------------------------------------------------------------------------
+
+export const LEDGER_ENTRY_SCHEMA = 'rbk.ledger_entry.v1' as const;
+
+/** `decision` = a new judgement; `correction` = a restatement of an envelope. */
+export type LedgerRecordKind = 'decision' | 'correction';
+
+/**
+ * Human-readable identification of the action. The decision binds the action
+ * by digest only, which is right for identity and useless for reading the
+ * ledger back six weeks later.
+ */
+export interface LedgerAction {
+  action_id: Identifier;
+  action_kind: string;
+  domain?: string;
+  summary?: string;
+  proposed_by: ProposedBy;
+}
+
+export interface LedgerSupersedes {
+  seq: number;
+  reason: string;
+}
+
+export interface LedgerEntry {
+  schema: 'rbk.ledger_entry.v1';
+  ledger_id: Identifier;
+  /** Strictly increasing across the file; the identity of the *line*. */
+  seq: number;
+  record_kind: LedgerRecordKind;
+  /** When the line was written — not when the decision was computed. */
+  recorded_at: string;
+  /**
+   * When the action was requested. Optional because the host may not know it;
+   * `decision.computed_at − requested_at` is the only way to recover how long
+   * the action waited, which is currently unmeasured for three-valued routing.
+   */
+  requested_at?: string;
+  action: LedgerAction;
+  human_admission?: HumanAdmission;
+  /** `decide()`'s output, verbatim. The ledger records it; it never revises it. */
+  decision: Decision;
+  /** Present exactly when `record_kind === 'correction'`. */
+  supersedes?: LedgerSupersedes;
+  note?: string;
+}

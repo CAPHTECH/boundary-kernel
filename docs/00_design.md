@@ -215,6 +215,7 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 | `schemas/rbk.policy.v1.schema.json` | 境界の上限(ceiling)・閾値・権限地図 |
 | `schemas/rbk.request.v1.schema.json` | 行為 + 証拠状態(計算の入力) |
 | `schemas/rbk.decision.v3.schema.json` | routing(三値)+ measurement(`basis_complete`)+ factor 別の根拠 + 同一性 |
+| `schemas/rbk.ledger_entry.v1.schema.json` | 追記専用台帳の1行(§8)。decision を記録する封筒であって、判定の契約ではない |
 
 **契約は自分の主張を強制する。** `factors` の「6種を1回ずつ、必ず全て」は v0.2 では `description` に書いてあるだけで、重複も7件目も検証を通っていた。強制していない主張は契約ではないので、`minItems`/`maxItems` と factor 種別ごとの `contains`(`minContains`/`maxContains`)で表現し直した。`uniqueItems` は object 全体の比較なので、同じ factor 種別が別の verdict で2度現れる場合を弾けない — ここでは使えない。`validate.py` は、スキーマが拒否すべきインスタンス(重複・7件目・欠落)を実際に投げて拒否を確認する。
 
@@ -231,3 +232,60 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 自分の製品原則が自分に適用されたときに面倒でも守れるか、が原則が本物かどうかの試験になる。ここではその記録として残す。
 
 実装は言語非依存(Rust の reviewgraphen、TypeScript の Assay Kit / Cloudflare OS Gadget の双方から使う)。共有するのは**コードではなく契約と語彙**である。
+
+## 8. Agency Ledger-lite — 判断の来歴(追記専用 JSONL)
+
+`decide()` が出した判断を**追記専用の JSONL 台帳**として残す。1行 = 1判断。
+
+**台帳は観測であって判定ではない。** カーネルの契約には一切触れない — `decision_id` の定義も、二軸の合成規則も、factor の意味も、台帳側では変えない。台帳がやるのは、decision を**そのまま封筒に入れて時刻を添えること**だけである。
+
+### なぜ decision を丸ごと入れるのか(射影にしない)
+
+台帳の行は `rbk.decision.v3` を**そのまま**埋め込む。「outcome と basis_complete と factor の verdict だけ抜き出す」射影にはしない。抜き出す判断を台帳側が持てば、契約が2箇所に分かれて必ず食い違うからである。要求されている記録項目 — `decision_id` / `outcome` / `basis_complete` / 6 factor の verdict と reasons / `evidence_state_digest` と policy の識別 / 基盤が欠けたときの「次に観測すべきこと」 — は、すべて decision schema が既に必須にしている。台帳がもう一度定義し直す理由はない。
+
+**二軸は二軸のまま残る。** `outcome`(routing)と `basis_complete`(measurement)は decision の別々のフィールドとして記録され、集計でも別々に数える(下記)。片方をもう片方に畳む余地は、台帳のどこにも作らない。
+
+### 封筒が足すもの
+
+| フィールド | なぜ decision 側にないか |
+|---|---|
+| `recorded_at` | 台帳に書いた時刻。判断時刻(`decision.computed_at`)とは別の量で、差は台帳への反映遅れである |
+| `requested_at`(任意) | 行為が要求された時刻。カーネルの入力に無い。ホストが知っているときだけ入る |
+| `action`(識別) | decision は action を `action_digest` でしか持たない。digest は同一性のためで、可読性のためではない |
+| `human_admission`(任意) | U(授権)を誰が握っていたかの事実。カーネルは判定に使わない |
+| `ledger_id` / `seq` | 行の同一性と追記順。`decision_id` は同じ入力なら再計算で同じ値になるので、**行**を一意に指せない |
+
+**判断時刻は重複させない。** `decision.computed_at` を封筒側にコピーすれば「同じことを言う2つのフィールドが食い違う」状態を自分で作ることになる。時刻は decision の中の1箇所にしか無い。
+
+### 時刻を必ず持つ理由
+
+製品文書の**限界2**: 三値化がスループットに与える影響を一度も測っていない。「厳格にすれば遅くなるのでは」という反論に現在答えを持っておらず、`incomplete` で滞留が伸びる可能性は未検証の仮説のままである。**後から測れる形で残しておかなければ、答えは永久に出ない。** 滞留時間 = `decision.computed_at − requested_at` はここからしか出せない。
+
+`requested_at` を持たない行は、集計側で**未計測として別に数える**(`queue_latency.unmeasured`)。計測できた母集団に混ぜて平均を出せば、部分的な計測を完全な計測として提示することになる。
+
+### 追記専用と訂正
+
+追記専用性を**構造として**表現する。文書上の約束にはしない。
+
+- `seq` は 0 以上で狭義単調増加する。行の書き換えは、連番の重複または巻き戻しとして現れる — 読み出し側(`readLedger()`)と `validate.py` がこれを拒否する。
+- 訂正は**新しい行**で行う(`record_kind: 'correction'` + `supersedes`)。訂正される行はそのまま残る。理由(`supersedes.reason`)は必須である — 理由のない訂正は履歴を壊すだけで、「理由のない制限を出力しない」(§4)と同じ規律を適用する。
+- **訂正できるのは封筒だけで、decision ではない。** 訂正行は元の行と同じ `decision_id` を持たなければならない。計算されたものは計算されたのであって、台帳がそれを書き直す権限は無い。
+- 逆に、証拠が増えて判断し直したものは**訂正ではない**。それ自体が新しい判断であり、前の判断を無効にはしない(スキーマは `record_kind: 'decision'` が `supersedes` を持つことを禁じる)。2つの判断の関係は `attribute()` が扱う領域である。
+
+ファイル I/O は台帳モジュールに入れない(`src/` は Workers でも動く依存ゼロを維持する)。追記はホスト側の1行である。
+
+### 集計
+
+読み出し側の最小集計(`summarize()`)。
+
+- `by_outcome` — 三値を**別々に**数える。`incomplete` を `human_required` に足さない(§6)
+- `basis_incomplete` — 基盤が欠けた行の数。routing に関わらず数えるので `by_outcome.incomplete` の**上位集合**である。`human_required` かつ基盤欠損の行がここに現れる — v0.1 が失っていた情報がそのまま集計に出る
+- `basis_gap_by_factor` — どの factor が欠損を報告したか。6種すべてをキーとして持つので、0 は 0 として見える
+- `required_evidence_modes` — 「次に何を観測すべきか」の内訳。**これは「あと少しで承認できる案件の待ち行列」ではない。** 欠けた観測が埋まった結果 `human_required` になることは普通に起きる(§3)。示しているのは達成可能性ではなく、計算不能を解消する手段である
+- `queue_latency` — 滞留時間(全体および outcome 別)。計測できた件数と未計測の件数を必ず併記する
+
+訂正された行は集計から除外し、訂正行のほうを数える(`superseded` / `corrections` として件数は報告する)。
+
+### 下流
+
+ct-biz 側の D4(判断と来歴)への自社適用がそのまま PoC の実データ検証になる。自社の授権判断を `caphtech-self` policy pack で計算し、その出力をこの台帳に積めば、**`incomplete` の件数と滞留時間が同時に取れる** — 「二値の承認キューには分からないの置き場がない」という主張と、「厳格にすれば遅くなるのでは」という反論が、同じ台帳の別の列として並ぶ。
