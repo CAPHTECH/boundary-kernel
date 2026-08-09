@@ -1,6 +1,6 @@
 {
   "name": "boundary-kernel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Review Boundary Kernel (RBK) — deterministic reference implementation of the auto_apply / human_required / incomplete boundary computation.",
   "type": "module",
   "exports": {

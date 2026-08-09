@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://caph.tech/schemas/rbk.decision.v1.schema.json",
-  "title": "Review Boundary Decision v1",
-  "description": "境界計算の出力。三値の結論と、それを導いた factor 別の根拠、および同一性(帰属のための digest 群)。",
+  "$id": "https://caph.tech/schemas/rbk.decision.v2.schema.json",
+  "title": "Review Boundary Decision v2",
+  "description": "境界計算の出力。routing(三値の outcome)と measurement(basis_complete)の二軸、それを導いた factor 別の根拠、および同一性(帰属のための digest 群)。v1 からの破壊的変更: basis_complete を decision と factorVerdict の双方に必須で追加した。v1 は routing と measurement を単一の値に畳んでおり、human_required と incomplete が同時に立つ状態を表現できなかった(設計 §3)。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,12 +11,13 @@
     "request_id",
     "policy_id",
     "outcome",
+    "basis_complete",
     "factors",
     "identity",
     "computed_at"
   ],
   "properties": {
-    "schema": { "const": "rbk.decision.v1" },
+    "schema": { "const": "rbk.decision.v2" },
 
     "decision_id": {
       "description": "hash(action_digest, evidence_state_digest, policy_id, policy_version)。policy を含むため、policy 変更は新しい decision を生む。",
@@ -27,8 +28,13 @@
     "policy_version": { "$ref": "#/$defs/semver" },
 
     "outcome": {
-      "description": "incomplete を human_required に潰してはならない。集計時も別カウントを維持する。",
+      "description": "routing 軸 — この行為をどこへ回すか。incomplete を human_required に潰してはならない。集計時も別カウントを維持する。",
       "enum": ["auto_apply", "human_required", "incomplete"]
+    },
+
+    "basis_complete": {
+      "description": "measurement 軸 — 我々の証拠基盤は十分だったか。いずれかの factor が incomplete 信号を1つでも出したら false。outcome が human_required でも false になりうる(むしろそれが v1 で失われていた情報)。outcome == incomplete は、basis_complete == false かつ human_required の factor が無い場合と厳密に一致する。",
+      "type": "boolean"
     },
 
     "granted_dimensions": {
@@ -115,10 +121,10 @@
 
   "allOf": [
     {
-      "$comment": "incomplete は「次に何を観測すべきか」を必ず返す。返せないなら incomplete と名乗れない。",
+      "$comment": "基盤が欠けているなら「次に何を観測すべきか」を必ず返す。outcome が human_required でも同じ — 返せないなら欠損を報告したことにならない。",
       "if": {
-        "required": ["outcome"],
-        "properties": { "outcome": { "const": "incomplete" } }
+        "required": ["basis_complete"],
+        "properties": { "basis_complete": { "const": false } }
       },
       "then": {
         "required": ["routing"],
@@ -131,13 +137,95 @@
       }
     },
     {
-      "$comment": "auto_apply なら保留された次元は存在しない(単調な狭まりの帰結)。",
+      "$comment": "auto_apply なら保留された次元は存在せず(単調な狭まりの帰結)、基盤も完全である。",
       "if": {
         "required": ["outcome"],
         "properties": { "outcome": { "const": "auto_apply" } }
       },
       "then": {
-        "properties": { "withheld_dimensions": { "maxItems": 0 } }
+        "properties": {
+          "withheld_dimensions": { "maxItems": 0 },
+          "basis_complete": { "const": true }
+        }
+      }
+    },
+    {
+      "$comment": "不変条件(→): outcome == incomplete ⟹ basis_complete == false かつ human_required な factor は無い。",
+      "if": {
+        "required": ["outcome"],
+        "properties": { "outcome": { "const": "incomplete" } }
+      },
+      "then": {
+        "properties": {
+          "basis_complete": { "const": false },
+          "factors": {
+            "not": {
+              "contains": {
+                "type": "object",
+                "required": ["verdict"],
+                "properties": { "verdict": { "const": "human_required" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "不変条件(←): basis_complete == false かつ human_required な factor が無いなら、outcome は incomplete でなければならない。",
+      "if": {
+        "type": "object",
+        "required": ["basis_complete", "factors"],
+        "properties": {
+          "basis_complete": { "const": false },
+          "factors": {
+            "not": {
+              "contains": {
+                "type": "object",
+                "required": ["verdict"],
+                "properties": { "verdict": { "const": "human_required" } }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": { "outcome": { "const": "incomplete" } }
+      }
+    },
+    {
+      "$comment": "decision の basis_complete は factor の basis_complete の連言である(→)。",
+      "if": {
+        "required": ["factors"],
+        "properties": {
+          "factors": {
+            "contains": {
+              "type": "object",
+              "required": ["basis_complete"],
+              "properties": { "basis_complete": { "const": false } }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": { "basis_complete": { "const": false } }
+      }
+    },
+    {
+      "$comment": "同(←): 基盤が欠けていると言うなら、そう言った factor が存在しなければならない。",
+      "if": {
+        "required": ["basis_complete"],
+        "properties": { "basis_complete": { "const": false } }
+      },
+      "then": {
+        "properties": {
+          "factors": {
+            "contains": {
+              "type": "object",
+              "required": ["basis_complete"],
+              "properties": { "basis_complete": { "const": false } }
+            }
+          }
+        }
       }
     }
   ],
@@ -154,14 +242,18 @@
     "factorVerdict": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["factor", "verdict", "reasons"],
+      "required": ["factor", "verdict", "basis_complete", "reasons"],
       "properties": {
         "factor": {
           "enum": ["applicability", "authority", "evidence", "freshness", "risk", "reversibility"]
         },
         "verdict": {
-          "description": "satisfied 以外は必ず reasons を伴う。理由のない制限を出力してはならない。",
+          "description": "routing 軸。satisfied 以外は必ず reasons を伴う。理由のない制限を出力してはならない。",
           "enum": ["satisfied", "human_required", "incomplete"]
+        },
+        "basis_complete": {
+          "description": "measurement 軸。この factor が incomplete 信号を1つでも出したら false。verdict=human_required と basis_complete=false は同時に立ちうる — その factor が「人間が決めるべき」と「証拠基盤も欠けている」の両方を報告した場合であり、後者を reasons のテキストに埋めて捨ててはならない。",
+          "type": "boolean"
         },
         "reasons": {
           "type": "array",
@@ -180,6 +272,26 @@
           "if": {
             "required": ["verdict"],
             "properties": { "verdict": { "not": { "const": "satisfied" } } }
+          },
+          "then": {
+            "properties": { "reasons": { "minItems": 1 } }
+          }
+        },
+        {
+          "$comment": "verdict=incomplete なら基盤は必ず欠けている(逆は成り立たない)。",
+          "if": {
+            "required": ["verdict"],
+            "properties": { "verdict": { "const": "incomplete" } }
+          },
+          "then": {
+            "properties": { "basis_complete": { "const": false } }
+          }
+        },
+        {
+          "$comment": "基盤が欠けている factor は理由を述べなければならない。",
+          "if": {
+            "required": ["basis_complete"],
+            "properties": { "basis_complete": { "const": false } }
           },
           "then": {
             "properties": { "reasons": { "minItems": 1 } }

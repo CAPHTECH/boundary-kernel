@@ -8,9 +8,15 @@ Checks:
   3. Invariants from docs/00_design.md that the schemas alone do not enforce:
        (a) factors: all 6 factor kinds present, exactly once each.
        (b) every factor verdict != satisfied carries a non-empty reasons list.
-       (c) composition rule: human_required > incomplete > auto_apply.
-       (d) outcome == auto_apply implies withheld_dimensions is empty.
-       (e) granted_dimensions is a subset of the request's requested_dimensions.
+       (c) routing rule: human_required > incomplete > auto_apply.
+       (d) measurement rule: basis_complete is the conjunction of the factors'
+           basis_complete flags, and a factor with verdict == incomplete has
+           basis_complete == false.
+       (e) the two-axis invariant (design §3, v0.2):
+               outcome == incomplete
+           <=> basis_complete == false and no factor is human_required.
+       (f) outcome == auto_apply implies withheld_dimensions is empty.
+       (g) granted_dimensions is a subset of the request's requested_dimensions.
 
 Usage:
     python3 validate.py
@@ -42,7 +48,7 @@ FIXTURES_DIR = ROOT / "fixtures"
 SCHEMA_FILES = {
     "policy": SCHEMAS_DIR / "rbk.policy.v1.schema.json",
     "request": SCHEMAS_DIR / "rbk.request.v1.schema.json",
-    "expected-decision": SCHEMAS_DIR / "rbk.decision.v1.schema.json",
+    "expected-decision": SCHEMAS_DIR / "rbk.decision.v2.schema.json",
 }
 
 ALL_FACTORS = {
@@ -148,9 +154,77 @@ def check_composition_rule(label, decision):
     if outcome != expected:
         fail(
             label,
-            f"outcome={outcome!r} but composition rule requires {expected!r} "
+            f"outcome={outcome!r} but the routing rule requires {expected!r} "
             f"given factor verdicts {sorted(verdicts)}",
         )
+        return False
+    ok(label)
+    return True
+
+
+def check_measurement_rule(label, decision):
+    """basis_complete is the conjunction over factors, and an incomplete
+    verdict always implies a missing basis."""
+    factors = decision.get("factors", [])
+    problems = []
+
+    for f in factors:
+        if f.get("verdict") == "incomplete" and f.get("basis_complete") is not False:
+            problems.append(
+                f"factor {f.get('factor')!r}: verdict=incomplete but "
+                f"basis_complete={f.get('basis_complete')!r}"
+            )
+
+    expected = all(f.get("basis_complete") is True for f in factors)
+    actual = decision.get("basis_complete")
+    if actual != expected:
+        short = [f.get("factor") for f in factors if f.get("basis_complete") is not True]
+        problems.append(
+            f"basis_complete={actual!r} but the factors give {expected!r} "
+            f"(factors with a missing basis: {short})"
+        )
+
+    if problems:
+        fail(label, "; ".join(problems))
+        return False
+    ok(label)
+    return True
+
+
+def check_two_axis_invariant(label, decision):
+    """outcome == incomplete <=> basis_complete is False and nothing is
+    human_required (design §3, v0.2). This is the invariant v0.1 violated:
+    a human_required factor used to discard a co-occurring incomplete."""
+    factors = decision.get("factors", [])
+    any_human_required = any(f.get("verdict") == "human_required" for f in factors)
+    basis_short = decision.get("basis_complete") is False
+    outcome = decision.get("outcome")
+
+    lhs = outcome == "incomplete"
+    rhs = basis_short and not any_human_required
+
+    if lhs != rhs:
+        fail(
+            label,
+            f"outcome={outcome!r}, basis_complete={decision.get('basis_complete')!r}, "
+            f"any human_required factor={any_human_required} — "
+            f"'outcome == incomplete' ({lhs}) must equal "
+            f"'basis missing and nothing human_required' ({rhs})",
+        )
+        return False
+    ok(label)
+    return True
+
+
+def check_basis_gap_is_actionable(label, decision):
+    """A missing basis must always say what to observe next — whatever the
+    routing says. Otherwise the gap is recorded but unactionable."""
+    if decision.get("basis_complete") is not False:
+        ok(label)
+        return True
+    modes = decision.get("routing", {}).get("required_evidence_modes", [])
+    if not modes:
+        fail(label, "basis_complete=false but routing.required_evidence_modes is empty/absent")
         return False
     ok(label)
     return True
@@ -219,7 +293,10 @@ def main():
 
         check_factors_complete(f"{name}: factors complete (6 kinds)", decision)
         check_reasons_present(f"{name}: reasons present for non-satisfied verdicts", decision)
-        check_composition_rule(f"{name}: composition rule (human_required>incomplete>auto_apply)", decision)
+        check_composition_rule(f"{name}: routing rule (human_required>incomplete>auto_apply)", decision)
+        check_measurement_rule(f"{name}: measurement rule (basis_complete = AND over factors)", decision)
+        check_two_axis_invariant(f"{name}: outcome==incomplete <=> basis missing and nothing human_required", decision)
+        check_basis_gap_is_actionable(f"{name}: a missing basis names what to observe next", decision)
         check_auto_apply_withheld_empty(f"{name}: auto_apply implies no withheld_dimensions", decision)
         if request is not None:
             check_granted_subset_of_requested(f"{name}: granted_dimensions subset of requested_dimensions", decision, request)

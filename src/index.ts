@@ -10,7 +10,7 @@
  *   const decision = decide(policy, request, digests);
  */
 
-export { decide, compose, KERNEL_VERSION, type DecideOptions } from './decide.ts';
+export { decide, compose, composeBasis, KERNEL_VERSION, type DecideOptions } from './decide.ts';
 export { attribute } from './attribute.ts';
 export {
   digest,

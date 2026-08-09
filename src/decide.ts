@@ -7,16 +7,24 @@
  * `decision_id`, which uses the dependency-free synchronous SHA-256 in
  * `sha256.ts` (byte-identical to the Web Crypto path in `digest.ts`).
  *
- * Composition rule — the asymmetry is the whole point:
+ * Two axes, not one (design §3, corrected in v0.2):
  *
+ *   routing — where the action goes
  *     any factor human_required        → human_required
  *     otherwise, any factor incomplete → incomplete
  *     all satisfied                    → auto_apply
  *
- * `incomplete` is never collapsed into `human_required`: the former says
- * "this might have been auto-appliable but we cannot show it", which is a
- * signal about missing measurement infrastructure. Collapsing it hides that
- * gap permanently.
+ *   measurement — was our evidential basis sufficient
+ *     any factor raised an incomplete signal → basis_complete = false
+ *
+ * v0.1 folded both questions into the single three-valued `outcome`, so a
+ * `human_required` factor silently discarded a co-occurring `incomplete` —
+ * exactly the collapse the design forbids. The two are independently true:
+ * "a human must decide" and "our basis was also short" happen together.
+ *
+ * `outcome === 'incomplete'` is therefore not a separate rule but the special
+ * case `basis_complete === false` with no `human_required` factor; the basis
+ * gap is recorded whatever the routing says.
  */
 
 import { decisionIdPreimage } from './digest.ts';
@@ -38,7 +46,7 @@ import {
   type Verdict,
 } from './types.ts';
 
-export const KERNEL_VERSION: Semver = '0.1.0';
+export const KERNEL_VERSION: Semver = '0.2.0';
 
 export interface DecideOptions {
   /**
@@ -81,6 +89,7 @@ export function decide(
   ];
 
   const outcome = compose(factors.map((f) => f.verdict));
+  const basis_complete = composeBasis(factors);
 
   const decision_id = `sha256:${sha256Utf8(
     decisionIdPreimage({
@@ -92,12 +101,13 @@ export function decide(
   )}`;
 
   const decision: Decision = {
-    schema: 'rbk.decision.v1',
+    schema: 'rbk.decision.v2',
     decision_id,
     request_id: request.request_id,
     policy_id: policy.policy_id,
     policy_version: policy.version,
     outcome,
+    basis_complete,
     factors,
     identity: {
       action_digest: digests.action_digest,
@@ -119,9 +129,12 @@ export function decide(
     decision.withheld_dimensions = [...requested];
   }
 
-  if (outcome === 'incomplete') {
-    // "What should be observed next" is mandatory — a decision that cannot say
-    // it has no business calling itself incomplete (decision schema allOf[0]).
+  if (!basis_complete) {
+    // "What should be observed next" is mandatory whenever the basis is short —
+    // not only when the routing happens to be `incomplete`. A human_required
+    // decision whose basis was also incomplete must still say what is missing,
+    // otherwise the gap is unactionable and we are back to v0.1's collapse
+    // (decision schema allOf).
     decision.routing = {
       required_evidence_modes: requiredEvidenceModes(policy, factors, freshness.unresolved_modes),
     };
@@ -134,18 +147,33 @@ export function decide(
 // Composition
 // ---------------------------------------------------------------------------
 
-/** human_required > incomplete > auto_apply (design §3). */
+/** routing axis: human_required > incomplete > auto_apply (design §3). */
 export function compose(verdicts: readonly Verdict[]): Outcome {
   if (verdicts.includes('human_required')) return 'human_required';
   if (verdicts.includes('incomplete')) return 'incomplete';
   return 'auto_apply';
 }
 
-/** The same asymmetry applied inside a single factor. */
-function worst(verdicts: readonly Verdict[]): Verdict {
-  if (verdicts.includes('human_required')) return 'human_required';
-  if (verdicts.includes('incomplete')) return 'incomplete';
-  return 'satisfied';
+/**
+ * measurement axis: the basis is complete only if no factor reported a gap.
+ * Independent of `compose()` by construction — that independence is the fix.
+ */
+export function composeBasis(factors: readonly Pick<FactorVerdict, 'basis_complete'>[]): boolean {
+  return factors.every((factor) => factor.basis_complete);
+}
+
+/**
+ * Both axes for a single factor, resolved from the signals it raised.
+ * `human_required` wins the routing; an `incomplete` signal marks the basis
+ * short even when it lost the routing.
+ */
+function resolve(verdicts: readonly Verdict[]): { verdict: Verdict; basis_complete: boolean } {
+  const verdict: Verdict = verdicts.includes('human_required')
+    ? 'human_required'
+    : verdicts.includes('incomplete')
+      ? 'incomplete'
+      : 'satisfied';
+  return { verdict, basis_complete: !verdicts.includes('incomplete') };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +228,7 @@ function evaluateApplicability(policy: Policy, request: Request): FactorVerdict 
     }
   }
 
-  return { factor: 'applicability', verdict: worst(verdicts), reasons };
+  return { factor: 'applicability', ...resolve(verdicts), reasons };
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +247,7 @@ function evaluateAuthority(policy: Policy, request: Request): AuthorityResult {
   // constrains what *non-humans* may hold (policy.authority.non_human_may_hold).
   if (action.proposed_by.actor_kind === 'human') {
     return {
-      verdict_entry: { factor: 'authority', verdict: 'satisfied', reasons: [] },
+      verdict_entry: { factor: 'authority', verdict: 'satisfied', basis_complete: true, reasons: [] },
       withheld: [],
     };
   }
@@ -259,6 +287,9 @@ function evaluateAuthority(policy: Policy, request: Request): AuthorityResult {
     verdict_entry: {
       factor: 'authority',
       verdict: withheld.length > 0 ? 'human_required' : 'satisfied',
+      // Authority is decided from the policy's map alone: it is never short of
+      // measurement, only of permission.
+      basis_complete: true,
       reasons,
     },
     withheld,
@@ -324,7 +355,7 @@ function evaluateEvidence(
 
   return {
     factor: 'evidence',
-    verdict: worst(verdicts),
+    ...resolve(verdicts),
     reasons,
     evidence_ids: qualifying.map((item) => item.evidence_id),
   };
@@ -362,7 +393,13 @@ function evaluateFreshness(
 
   if (!policy.freshness.require_fresh) {
     return {
-      verdict_entry: { factor: 'freshness', verdict: 'satisfied', reasons: [], evidence_ids },
+      verdict_entry: {
+        factor: 'freshness',
+        verdict: 'satisfied',
+        basis_complete: true,
+        reasons: [],
+        evidence_ids,
+      },
       unresolved_modes: [],
     };
   }
@@ -425,7 +462,7 @@ function evaluateFreshness(
   }
 
   return {
-    verdict_entry: { factor: 'freshness', verdict: worst(verdicts), reasons, evidence_ids },
+    verdict_entry: { factor: 'freshness', ...resolve(verdicts), reasons, evidence_ids },
     unresolved_modes: [...unresolved],
   };
 }
@@ -489,7 +526,7 @@ function evaluateRisk(policy: Policy, request: Request): FactorVerdict {
     }
   }
 
-  return { factor: 'risk', verdict: worst(verdicts), reasons };
+  return { factor: 'risk', ...resolve(verdicts), reasons };
 }
 
 // ---------------------------------------------------------------------------
@@ -505,6 +542,7 @@ function evaluateReversibility(policy: Policy, request: Request): FactorVerdict 
       return {
         factor: 'reversibility',
         verdict: 'human_required',
+        basis_complete: true,
         reasons: [
           `action.reversibility is 'irreversible'; an irreversible action is never auto-applied`,
         ],
@@ -513,6 +551,7 @@ function evaluateReversibility(policy: Policy, request: Request): FactorVerdict 
       return {
         factor: 'reversibility',
         verdict: 'incomplete',
+        basis_complete: false,
         reasons: [
           `action.reversibility is 'unknown'; unknown must not be treated as reversible`,
         ],
@@ -522,14 +561,15 @@ function evaluateReversibility(policy: Policy, request: Request): FactorVerdict 
         return {
           factor: 'reversibility',
           verdict: 'human_required',
+          basis_complete: true,
           reasons: [
             `action.reversibility 'compensatable' does not meet policy.reversibility.minimum 'reversible'`,
           ],
         };
       }
-      return { factor: 'reversibility', verdict: 'satisfied', reasons: [] };
+      return { factor: 'reversibility', verdict: 'satisfied', basis_complete: true, reasons: [] };
     case 'reversible':
-      return { factor: 'reversibility', verdict: 'satisfied', reasons: [] };
+      return { factor: 'reversibility', verdict: 'satisfied', basis_complete: true, reasons: [] };
   }
 }
 
@@ -538,9 +578,12 @@ function evaluateReversibility(policy: Policy, request: Request): FactorVerdict 
 // ---------------------------------------------------------------------------
 
 /**
- * What would have to be observed to resolve the `incomplete`. Freshness
- * contributes the modes of the very items that went stale (re-run those);
- * anything else falls back to the policy's accepted modes.
+ * What would have to be observed to close the basis gap. Freshness contributes
+ * the modes of the very items that went stale (re-run those); anything else
+ * falls back to the policy's accepted modes.
+ *
+ * Keyed on `basis_complete`, not on `verdict`: a factor that raised an
+ * incomplete signal but routed to `human_required` still needs re-observation.
  */
 function requiredEvidenceModes(
   policy: Policy,
@@ -550,7 +593,7 @@ function requiredEvidenceModes(
   const modes = new Set<string>(freshnessUnresolvedModes);
 
   const otherIncomplete = factors.some(
-    (factor) => factor.factor !== 'freshness' && factor.verdict === 'incomplete',
+    (factor) => factor.factor !== 'freshness' && !factor.basis_complete,
   );
   if (otherIncomplete || modes.size === 0) {
     for (const mode of policy.evidence.accepted_modes) modes.add(mode);

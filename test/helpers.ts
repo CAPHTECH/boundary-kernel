@@ -18,6 +18,7 @@ export const FIXTURE_NAMES = [
   '02-authority-withheld',
   '03-incomplete-stale-evidence',
   '04-human-required-risk',
+  '05-human-required-with-incomplete-basis',
 ] as const;
 
 function readJson<T>(path: string): T {

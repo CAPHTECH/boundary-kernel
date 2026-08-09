@@ -43,12 +43,16 @@ for (const c of cases) {
   if (match) agree += 1;
   else disagreements.push(c.case_id);
 
-  const blocking = decision.factors.filter((f) => f.verdict !== 'satisfied');
+  const blocking = decision.factors.filter((f) => f.verdict !== 'satisfied' || !f.basis_complete);
   console.log(`\n[${c.case_id}] ${c.command}`);
   console.log(`  human : ${c.human_verdict}  (${c.human_note})`);
-  console.log(`  kernel: ${decision.outcome}  ${match ? '✔ 一致' : '✘ 不一致'}`);
+  console.log(
+    `  kernel: ${decision.outcome}  ${match ? '✔ 一致' : '✘ 不一致'}` +
+      `  [basis_complete=${decision.basis_complete}]`,
+  );
   for (const f of blocking) {
-    console.log(`    - ${f.factor} = ${f.verdict}: ${f.reasons.join(' / ')}`);
+    const basis = f.basis_complete ? '' : ' +基盤欠損';
+    console.log(`    - ${f.factor} = ${f.verdict}${basis}: ${f.reasons.join(' / ')}`);
   }
   if (decision.routing?.required_evidence_modes?.length) {
     console.log(`    → 解決に必要な観測: ${decision.routing.required_evidence_modes.join(', ')}`);

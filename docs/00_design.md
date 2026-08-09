@@ -78,7 +78,7 @@ measurement:
 
 factor 内でも同じ。1つの factor が `human_required` と `incomplete` の両方の理由を持つとき、verdict は `human_required` だが、**その factor が incomplete 信号を出したことを別に残す**(理由テキストに埋めない)。
 
-権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
+基盤の欠損は**行き先を示せなければ記録した意味がない**。`basis_complete == false` の decision は、outcome が `human_required` であっても `routing.required_evidence_modes`(次に何を観測すべきか)を必ず伴う。
 
 権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
 
@@ -93,7 +93,9 @@ factor 内でも同じ。1つの factor が `human_required` と `incomplete` �
 | `risk` | impact / exposure が閾値内か | reviewgraphen `risk` |
 | `reversibility` | 失敗時に取り消せるか、補償できるか | Actoric(Rollback Fiction の禁止) |
 
-各 factor は独立に `satisfied` / `human_required` / `incomplete` を返し、**理由を必ず添える**。理由のない制限は出力しない。
+各 factor は独立に `satisfied` / `human_required` / `incomplete` を返し、**理由を必ず添える**。理由のない制限は出力しない。加えて各 factor は `basis_complete` を返す — その factor が incomplete 信号を出したかどうかであり、verdict が `human_required` になっても消えない(§3)。
+
+`authority` と `reversibility` の `irreversible` / `compensatable` は policy の写像だけで決まるため、`basis_complete` は常に true になる。基盤の欠損を報告しうるのは `applicability`(capability_missing / unknown)、`evidence`(不足・inconclusive)、`freshness`(stale / unknown)、`risk`(未測定・不確実性超過)、`reversibility`(unknown)である。
 
 ### agency 次元(GAE 由来・RBK の差別化点)
 
@@ -129,6 +131,7 @@ policy_id のみ変化              → policy change
 ## 6. 出力に対する禁止事項
 
 - `incomplete` を `human_required` として集計しない
+- **`human_required` が立ったことを理由に `basis_complete` を true に丸めない**(v0.1 の誤り)
 - 満たされなかった factor を出力から省略しない(欠損は欠損として残す)
 - 確率・スコアを「証明」と表示しない(測候方法論 §3.4 保証境界: `evaluator_supported` を `proved` と表示してはならない)
 - policy 変更を evidence 変更として帰属しない
@@ -139,6 +142,8 @@ policy_id のみ変化              → policy change
 |---|---|
 | `schemas/rbk.policy.v1.schema.json` | 境界の上限(ceiling)・閾値・権限地図 |
 | `schemas/rbk.request.v1.schema.json` | 行為 + 証拠状態(計算の入力) |
-| `schemas/rbk.decision.v1.schema.json` | 三値 + factor 別の根拠 + 同一性 |
+| `schemas/rbk.decision.v2.schema.json` | routing(三値)+ measurement(`basis_complete`)+ factor 別の根拠 + 同一性 |
+
+`rbk.decision.v1` は撤回した。v1 は routing と measurement を単一の値に畳んでおり、§3 の訂正を表現できない。`basis_complete` を任意フィールドにすれば互換は保てたが、読み手が「無い = 完全」と解釈できてしまい、欠損を見えなくするという同じ失敗を再生産する。したがって必須フィールドとし、破壊的変更として v2 を切った。`rbk.policy.v1` / `rbk.request.v1` は変更していない。
 
 実装は言語非依存(Rust の reviewgraphen、TypeScript の Assay Kit / Cloudflare OS Gadget の双方から使う)。共有するのは**コードではなく契約と語彙**である。

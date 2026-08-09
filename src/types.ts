@@ -240,7 +240,15 @@ export type Verdict = 'satisfied' | 'human_required' | 'incomplete';
 
 export interface FactorVerdict {
   factor: FactorKind;
+  /** routing axis — where this factor sends the action. */
   verdict: Verdict;
+  /**
+   * measurement axis (design §3, v0.2) — `false` when this factor raised at
+   * least one `incomplete` signal, *including* when `verdict` came out
+   * `human_required`. A settled restriction routes, but it must never erase
+   * the record that our evidential basis was also short.
+   */
+  basis_complete: boolean;
   /** Non-`satisfied` verdicts must carry at least one reason (design §4). */
   reasons: string[];
   evidence_ids?: Identifier[];
@@ -283,12 +291,19 @@ export interface Routing {
 }
 
 export interface Decision {
-  schema: 'rbk.decision.v1';
+  schema: 'rbk.decision.v2';
   decision_id: Hash;
   request_id: Identifier;
   policy_id: Identifier;
   policy_version?: Semver;
+  /** routing axis (design §3). */
   outcome: Outcome;
+  /**
+   * measurement axis (design §3, v0.2): `false` iff any factor raised an
+   * `incomplete` signal. `outcome === 'incomplete'` is exactly the case
+   * `basis_complete === false` with no `human_required` factor.
+   */
+  basis_complete: boolean;
   granted_dimensions?: AgencyDimension[];
   withheld_dimensions?: AgencyDimension[];
   factors: FactorVerdict[];

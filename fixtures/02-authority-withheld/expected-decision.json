@@ -1,25 +1,27 @@
 {
-  "schema": "rbk.decision.v1",
+  "schema": "rbk.decision.v2",
   "decision_id": "sha256:0d94f69750083e1d9fde7cc5fbac975b855df3bb0b34ac200d66e8015781dc98",
   "request_id": "req-02-authority-withheld",
   "policy_id": "gatekeeper-side-effect-default",
   "policy_version": "1.0.0",
   "outcome": "human_required",
+  "basis_complete": true,
   "withheld_dimensions": ["authorize"],
   "factors": [
-    { "factor": "applicability", "verdict": "satisfied", "reasons": [] },
+    { "factor": "applicability", "verdict": "satisfied", "basis_complete": true, "reasons": [] },
     {
       "factor": "authority",
       "verdict": "human_required",
+      "basis_complete": true,
       "reasons": [
         "requested dimension 'authorize' is not in policy.authority.non_human_may_hold",
         "policy.authority.human_reserved includes 'authorize' and no authorize_delegation_rationale is present"
       ]
     },
-    { "factor": "evidence", "verdict": "satisfied", "reasons": [], "evidence_ids": ["ev-02-policy-check"] },
-    { "factor": "freshness", "verdict": "satisfied", "reasons": [], "evidence_ids": ["ev-02-policy-check"] },
-    { "factor": "risk", "verdict": "satisfied", "reasons": [] },
-    { "factor": "reversibility", "verdict": "satisfied", "reasons": [] }
+    { "factor": "evidence", "verdict": "satisfied", "basis_complete": true, "reasons": [], "evidence_ids": ["ev-02-policy-check"] },
+    { "factor": "freshness", "verdict": "satisfied", "basis_complete": true, "reasons": [], "evidence_ids": ["ev-02-policy-check"] },
+    { "factor": "risk", "verdict": "satisfied", "basis_complete": true, "reasons": [] },
+    { "factor": "reversibility", "verdict": "satisfied", "basis_complete": true, "reasons": [] }
   ],
   "identity": {
     "action_digest": "sha256:11d8509f8f0ab9b72a1c2ac9b6fe8ba922d97dfec36baf35b9871fede5c781fd",
@@ -29,5 +31,5 @@
     "escalate_to": "human:support-lead"
   },
   "computed_at": "2026-08-09T10:05:01Z",
-  "kernel_version": "0.1.0"
+  "kernel_version": "0.2.0"
 }
