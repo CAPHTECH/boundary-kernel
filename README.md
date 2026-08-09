@@ -36,6 +36,16 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 
 判定は6つの factor に分解されます: `applicability` / `authority` / `evidence` / `freshness` / `risk` / `reversibility`。各 factor は独立に verdict と `basis_complete` を返し、`satisfied` 以外には必ず理由が付きます。1つの factor が両方の信号を出したとき(例: 影響度が上限超過 **かつ** 不確実性が上限超過)、verdict は `human_required` ですが `basis_complete` は false のまま残ります。満たされなかった factor を出力から省くことはしません。
 
+## 同一性 — 集合を順序で扱わない
+
+`decision_id` と `evidence_state_digest` は、**意味の正規化を済ませた値**に対して計算されます(v0.2 で追加)。
+
+- **集合として宣言された配列**(`requested_dimensions`、`evidence_state.items`、staleness の理由、など)は digest の前に正準順へ並べ替えます。並べ替えただけで digest が動くと、`attribute()` が実際には起きていない `evidence_change` を報告してしまうためです。
+- **順序付きの配列**(`reasons` 類)はそのままです。順序それ自体がデータだからです。
+- 文字列は **NFC** に正規化します。`canonical.ts`(直列化器)は Unicode 正規化も並べ替えもしません — RFC 8785 と同じく、それは意味の側の判断だからです。
+
+どの配列が集合でどれが順序付きかは [`docs/00_design.md` §5](docs/00_design.md) の表と各スキーマの `description`(【集合】/【順序付き】)に明記してあります。暗黙にはしません。
+
 詳細な設計根拠は [`docs/00_design.md`](docs/00_design.md) にあります。
 
 ## 何をしないか
@@ -52,7 +62,7 @@ artifact 非依存です。コードレビューの自動マージ、RAG 評価�
 必要なもの: Node.js 22+(TypeScript を直接実行するため)、Python 3 と `jsonschema`(スキーマ検証のため)。
 
 ```bash
-# TypeScript 参照実装 (tsc --noEmit + node:test, 109 テスト)
+# TypeScript 参照実装 (tsc --noEmit + node:test, 121 テスト)
 npm install
 npm test
 
@@ -92,7 +102,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 
 v0.2 の二軸化で outcome は1件も変わっていません(6件中4件一致のまま)。増えたのは `basis_complete` 列で、`npm install` の基盤欠損は v0.1 では `human_required` に潰されて見えていませんでした。同じ `human_required` でも `git push` は `basis_complete = true` — 規約上人間が決めるべきだと分かっているだけで、観測が足りなかったわけではない、という区別です。
 
-**不一致の2件は、どちらも人間の判断のほうが弱かった**ケースです。`npm install` は外部レジストリから未検査のコードを取得する操作を「ビルド確認に必要だから」で通していました。ヒアドキュメントの件は、人間が承認しつつメモに自分で「ここが最も危うい判断だった」と書いていた箇所です。カーネルはそこで `human_required` ではなく `incomplete` を返し、「解決に必要な観測: static_command_analysis, sandbox_scope_check」を示しました。二値の承認キューには「分からない」を置く場所がなく、時間に追われた人間は yes を押します。
+**不一致の2件は、どちらも人間の判断のほうが弱かった**ケースです。`npm install` は外部レジストリから未検査のコードを取得する操作を「ビルド確認に必要だから」で通していました。ヒアドキュメントの件は、人間が承認しつつメモに自分で「ここが最も危うい判断だった」と書いていた箇所です。カーネルはそこで `human_required` ではなく `incomplete` を返し、「解決に必要な観測: sandbox_scope_check, static_command_analysis」を示しました。二値の承認キューには「分からない」を置く場所がなく、時間に追われた人間は yes を押します。
 
 ### 限界(重要)
 

@@ -43,7 +43,7 @@
         },
 
         "requested_dimensions": {
-          "description": "この行為の適用が要求する agency 次元。少なくとも1つ必要。",
+          "description": "【集合】この行為の適用が要求する agency 次元。少なくとも1つ必要。順序に意味は無く、digest を取る前に GAE ベクトル順 ⟨O,F,P,J,U,E,L⟩ に正規化される(設計 §5)。",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
@@ -76,6 +76,7 @@
           "properties": {
             "status": { "enum": ["applicable", "not_applicable", "capability_missing", "unknown"] },
             "reasons": {
+              "description": "【順序付き】ホストが述べた理由。順序それ自体がデータであり、正規化しない。",
               "type": "array",
               "items": { "$ref": "#/$defs/nonEmptyString" }
             }
@@ -83,7 +84,7 @@
         },
 
         "digest": {
-          "description": "行為内容の content hash。同一性の帰属に使う。省略時はカーネルが canonical JSON から算出する。",
+          "description": "行為内容の content hash。同一性の帰属に使う。集合の正規化と NFC を適用した上で canonical JSON を取り、SHA-256 する(設計 §5「正規化」)。digest 自身はこの計算に含めない。",
           "$ref": "#/$defs/hash"
         }
       }
@@ -96,7 +97,9 @@
       "required": ["items"],
       "properties": {
         "items": {
+          "description": "【集合】証拠項目の集合。evidence_id で一意。順序に意味は無く、digest を取る前に evidence_id 昇順に正規化される(設計 §5)。",
           "type": "array",
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/evidenceItem" }
         },
         "digest": {
@@ -187,7 +190,7 @@
           "properties": {
             "status": { "enum": ["fresh", "stale", "unknown"] },
             "reasons": {
-              "description": "stale の理由。status=stale で reasons が空なら、カーネルは理由不明として incomplete 方向に扱う。",
+              "description": "【集合】stale の理由。status=stale で reasons が空なら、カーネルは理由不明として incomplete 方向に扱う。順序に意味は無く、staleness 12分類の宣言順に正規化される。",
               "type": "array",
               "uniqueItems": true,
               "items": { "$ref": "#/$defs/stalenessReason" }

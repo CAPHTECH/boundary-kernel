@@ -29,13 +29,14 @@
       "required": ["action_kinds"],
       "properties": {
         "action_kinds": {
-          "description": "自由語彙。ホスト側の行為種別(例: code.patch, rag.config_change, gatekeeper.side_effect)",
+          "description": "【集合】自由語彙。ホスト側の行為種別(例: code.patch, rag.config_change, gatekeeper.side_effect)。正準順はコード単位昇順。",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/nonEmptyString" }
         },
         "domains": {
+          "description": "【集合】正準順はコード単位昇順。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/nonEmptyString" }
@@ -50,12 +51,13 @@
       "required": ["non_human_may_hold"],
       "properties": {
         "non_human_may_hold": {
+          "description": "【集合】正準順は GAE ベクトル順 ⟨O,F,P,J,U,E,L⟩。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/agencyDimension" }
         },
         "human_reserved": {
-          "description": "明示的に人間専有とする次元。既定で U(authorize) は人間専有として扱われ、ここに non_human_may_hold へ U を入れる場合は authorize_delegation_rationale が必須。",
+          "description": "【集合】明示的に人間専有とする次元。正準順は GAE ベクトル順。既定で U(authorize) は人間専有として扱われ、ここに non_human_may_hold へ U を入れる場合は authorize_delegation_rationale が必須。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/agencyDimension" }
@@ -87,7 +89,7 @@
       "properties": {
         "required": { "type": "boolean" },
         "accepted_modes": {
-          "description": "自由語彙(例: executable_test, static_verification, human_reasoned_decision, runtime_trace)。LLM 判定のみを受理する場合もここに明示させる。",
+          "description": "【集合】自由語彙(例: executable_test, static_verification, human_reasoned_decision, runtime_trace)。正準順はコード単位昇順。LLM 判定のみを受理する場合もここに明示させる。",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
@@ -112,7 +114,7 @@
         },
         "max_age_seconds": { "type": "integer", "minimum": 0 },
         "tolerated_staleness_reasons": {
-          "description": "この理由による stale は許容する(例: extractor_changed は許容するが target_changed は許容しない)。",
+          "description": "【集合】この理由による stale は許容する(例: extractor_changed は許容するが target_changed は許容しない)。正準順は staleness 12分類の宣言順。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/stalenessReason" }

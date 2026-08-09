@@ -14,6 +14,7 @@
  */
 
 import { canonicalJson } from './canonical.ts';
+import { normalizeAction, normalizeEvidenceState } from './normalize.ts';
 import type { Action, EvidenceState, Hash, Identifier, Semver } from './types.ts';
 
 const subtle = (): SubtleCrypto => {
@@ -39,10 +40,11 @@ export async function digest(value: unknown): Promise<Hash> {
 
 /**
  * Digest of the action's content. The action's own `digest` field is excluded:
- * a content hash cannot contain itself.
+ * a content hash cannot contain itself. Set-typed members are normalized first
+ * (`normalize.ts`) so that reordering a set is not mistaken for a change.
  */
 export async function actionDigest(action: Action): Promise<Hash> {
-  const { digest: _self, ...content } = action;
+  const { digest: _self, ...content } = normalizeAction(action);
   return digest(content);
 }
 
@@ -52,7 +54,7 @@ export async function actionDigest(action: Action): Promise<Hash> {
  * therefore break causal attribution (design §5).
  */
 export async function evidenceStateDigest(evidenceState: EvidenceState): Promise<Hash> {
-  const { digest: _self, ...content } = evidenceState;
+  const { digest: _self, ...content } = normalizeEvidenceState(evidenceState);
   return digest(content);
 }
 

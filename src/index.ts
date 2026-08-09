@@ -20,5 +20,14 @@ export {
   decisionIdPreimage,
 } from './digest.ts';
 export { canonicalJson, type JsonValue } from './canonical.ts';
+export {
+  nfcDeep,
+  normalizeAction,
+  normalizeEvidenceState,
+  sortDimensions,
+  sortEvidenceItems,
+  sortStalenessReasons,
+  sortStrings,
+} from './normalize.ts';
 export { sha256Bytes, sha256Utf8 } from './sha256.ts';
 export * from './types.ts';

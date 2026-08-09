@@ -6,7 +6,13 @@
  *   - object keys sorted by UTF-16 code unit order, recursively
  *   - no insignificant whitespace
  *   - `undefined` object members are dropped (JSON has no such value)
- *   - arrays keep their order (order is meaningful data, not formatting)
+ *   - arrays keep their order: this is a serializer, and to it every array is
+ *     a sequence. Arrays that are *sets* by contract are put into canonical
+ *     order beforehand by `normalize.ts` — deciding what an array means is not
+ *     the serializer's job
+ *   - strings are written as-is: no Unicode normalization happens here, for
+ *     the same reason (RFC 8785 leaves it to the application). Digest inputs
+ *     are NFC-normalized in `normalize.ts` instead
  *   - non-finite numbers and functions/symbols are rejected rather than
  *     silently turned into `null` — a digest must never hide a lost value
  *

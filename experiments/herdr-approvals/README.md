@@ -17,7 +17,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | `git push` | human_required | human_required | true | ✔ |
 | **ヒアドキュメント(静的解析不能)** | **auto_apply** | **incomplete** | **false** | ✘ |
 
-v0.2 の二軸化(routing / measurement)で **outcome は1件も変わらなかった**。変わったのは `npm install` で、v0.1 では `human_required` に潰されて見えなかった基盤の欠損(不確実性 0.4 が上限 0.2 を超過)が `basis_complete = false` として残り、「解決に必要な観測: static_command_analysis, sandbox_scope_check」を返すようになった。6件中、基盤が欠けていたのは2件である。
+v0.2 の二軸化(routing / measurement)で **outcome は1件も変わらなかった**。変わったのは `npm install` で、v0.1 では `human_required` に潰されて見えなかった基盤の欠損(不確実性 0.4 が上限 0.2 を超過)が `basis_complete = false` として残り、「解決に必要な観測: sandbox_scope_check, static_command_analysis」を返すようになった。6件中、基盤が欠けていたのは2件である。
 
 `git push` は対照になる: 同じ `human_required` でも `basis_complete` は true — 規約上人間が決めるべきだと**分かっている**だけで、我々の観測が足りなかったわけではない。v0.1 はこの2件を区別できなかった。
 
@@ -35,7 +35,7 @@ v0.2 では、この行き先(`human_required`)と並んで **`basis_complete = 
 
 人間は承認した。ただし承認時のメモに自分で「**ここが最も危うい判断だった**」と書いている。ホスト側も「シェル構文が静的解析不能」と警告していた。
 
-カーネルの答えは `human_required` ではなく **`incomplete`** だった。理由: 静的解析の結果が `inconclusive` で、証拠が policy を満たさない。不確実性 0.7 が上限 0.2 を超過。そして「解決に必要な観測: static_command_analysis, sandbox_scope_check」を返している。
+カーネルの答えは `human_required` ではなく **`incomplete`** だった。理由: 静的解析の結果が `inconclusive` で、証拠が policy を満たさない。不確実性 0.7 が上限 0.2 を超過。そして「解決に必要な観測: sandbox_scope_check, static_command_analysis」を返している。
 
 **二値の承認キューには「分からない」を表現する場所がない。** yes か no しか選べないので、時間に追われた人間は yes を押す。カーネルは「no」と「判断できない」を区別し、後者について**何を観測すれば判断できるようになるか**を返す。
 

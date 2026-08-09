@@ -38,21 +38,21 @@
     },
 
     "granted_dimensions": {
-      "description": "outcome=auto_apply のとき、非人間アクターに認められた agency 次元。要求された次元の部分集合であり、上回ることはない(単調な狭まり)。",
+      "description": "【集合】outcome=auto_apply のとき、非人間アクターに認められた agency 次元。正準順は GAE ベクトル順 ⟨O,F,P,J,U,E,L⟩。要求された次元の部分集合であり、上回ることはない(単調な狭まり)。",
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/agencyDimension" }
     },
 
     "withheld_dimensions": {
-      "description": "要求されたが認められなかった次元 = requested − granted。authority 以外の factor が閉じた場合も、認められた次元は無いのでここに全要求次元が入る。空でない場合、outcome は auto_apply にならない。",
+      "description": "【集合】要求されたが認められなかった次元 = requested − granted。正準順は GAE ベクトル順。authority 以外の factor が閉じた場合も、認められた次元は無いのでここに全要求次元が入る。空でない場合、outcome は auto_apply にならない。",
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/agencyDimension" }
     },
 
     "factors": {
-      "description": "全 factor を必ず列挙する。満たされた factor も省略しない(欠損と満足を区別できなくなるため)。",
+      "description": "【集合】factor 種別で一意。全 factor を必ず列挙する(6種)。満たされた factor も省略しない(欠損と満足を区別できなくなるため)。正準順は factor enum 順。",
       "type": "array",
       "minItems": 6,
       "items": { "$ref": "#/$defs/factorVerdict" }
@@ -80,6 +80,7 @@
           "enum": ["action_change", "evidence_change", "policy_change", "unattributable", "no_change"]
         },
         "changed_components": {
+          "description": "【集合】正準順は enum 宣言順。",
           "type": "array",
           "uniqueItems": true,
           "items": { "enum": ["action_digest", "evidence_state_digest", "policy_id", "policy_version"] }
@@ -103,7 +104,7 @@
       "additionalProperties": false,
       "properties": {
         "required_evidence_modes": {
-          "description": "incomplete を解消するために必要な証拠の種別。「次に何を観測すべきか」を必ず返す。",
+          "description": "【集合】基盤の欠損を解消するために必要な証拠の種別。「次に何を観測すべきか」を必ず返す。正準順はコード単位昇順。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/nonEmptyString" }
@@ -256,11 +257,12 @@
           "type": "boolean"
         },
         "reasons": {
+          "description": "【順序付き】カーネルが検出した順。順序それ自体が根拠の提示順であり、正規化しない。",
           "type": "array",
           "items": { "$ref": "#/$defs/nonEmptyString" }
         },
         "evidence_ids": {
-          "description": "この判定が参照した証拠。空であることは「参照する証拠が無かった」を意味する。",
+          "description": "【集合】この判定が参照した証拠。正準順は evidence_id 昇順。空であることは「参照する証拠が無かった」を意味する。",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/identifier" }

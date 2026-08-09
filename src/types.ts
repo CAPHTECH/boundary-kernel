@@ -63,6 +63,22 @@ export type StalenessReason =
   | 'runtime_evidence_expired'
   | 'mapping_unresolved';
 
+/** Declaration order = the canonical order of the reason *set* (design §5). */
+export const STALENESS_REASONS: readonly StalenessReason[] = [
+  'target_changed',
+  'dependency_changed',
+  'context_changed',
+  'evidence_changed',
+  'test_changed',
+  'policy_changed',
+  'rule_changed',
+  'extractor_changed',
+  'model_policy_changed',
+  'decision_expired',
+  'runtime_evidence_expired',
+  'mapping_unresolved',
+];
+
 export type Severity = 'none' | 'low' | 'medium' | 'high' | 'critical';
 
 export const SEVERITY_ORDER: readonly Severity[] = ['none', 'low', 'medium', 'high', 'critical'];

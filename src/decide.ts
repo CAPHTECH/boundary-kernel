@@ -28,6 +28,7 @@
  */
 
 import { decisionIdPreimage } from './digest.ts';
+import { normalizeAction, normalizeEvidenceState, sortStrings } from './normalize.ts';
 import { sha256Utf8 } from './sha256.ts';
 import {
   ASSURANCE_ORDER,
@@ -63,19 +64,27 @@ export function decide(
   digests: RequestDigests,
   options: DecideOptions = {},
 ): Decision {
-  const action = request.action;
+  // Sets are judged in canonical order, so that two requests differing only in
+  // the order of a set produce a byte-identical decision — not just an equal
+  // digest (design §5, `normalize.ts`).
+  const normalized: Request = {
+    ...request,
+    action: normalizeAction(request.action),
+    evidence_state: normalizeEvidenceState(request.evidence_state),
+  };
+  const action = normalized.action;
   const requested = action.requested_dimensions;
 
   // The evidence a verdict is allowed to lean on. Computed once so that the
   // `evidence` and `freshness` factors judge exactly the same items.
-  const qualifying = qualifyingEvidence(policy, request.evidence_state.items);
+  const qualifying = qualifyingEvidence(policy, normalized.evidence_state.items);
 
-  const applicability = evaluateApplicability(policy, request);
-  const authority = evaluateAuthority(policy, request);
-  const evidence = evaluateEvidence(policy, request, qualifying);
-  const freshness = evaluateFreshness(policy, request, qualifying);
-  const risk = evaluateRisk(policy, request);
-  const reversibility = evaluateReversibility(policy, request);
+  const applicability = evaluateApplicability(policy, normalized);
+  const authority = evaluateAuthority(policy, normalized);
+  const evidence = evaluateEvidence(policy, normalized, qualifying);
+  const freshness = evaluateFreshness(policy, normalized, qualifying);
+  const risk = evaluateRisk(policy, normalized);
+  const reversibility = evaluateReversibility(policy, normalized);
 
   // Order is the schema's factor enum order; all six are always present, and
   // satisfied factors are never omitted (design §6).
@@ -599,5 +608,6 @@ function requiredEvidenceModes(
     for (const mode of policy.evidence.accepted_modes) modes.add(mode);
   }
 
-  return [...modes];
+  // A set: emitted in canonical order, never in discovery order.
+  return sortStrings([...modes]);
 }

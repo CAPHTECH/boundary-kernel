@@ -128,6 +128,47 @@ policy_id のみ変化              → policy change
 
 「分離できない比較を単一原因として提示しない」— sdde の規律をそのまま継承する。
 
+### 正規化(canonicalization)— v0.2 で追加
+
+digest は言語非依存の契約である。同じ意味の入力が実装ごとに違うハッシュになってはならない。規範は二層に分ける。
+
+**第1層: 意味の正規化(`normalize.ts`)。** digest を取る前に適用する。
+
+1. **集合として宣言された配列は、正準順に並べ替える。** v0.1 はすべての配列を順序付きとして扱っていたため、`evidence_state.items` を並べ替えただけで `evidence_state_digest` が変わり、`attribute()` が `evidence_change` と誤報告した。
+2. **文字列は NFC に正規化する。** `"café"` の NFC と NFD は読み手には同一で、SHA-256 には別物である。どちらを出すかはホストの言語処理系に依存するため、契約側で固定する。
+
+**第2層: 直列化(`canonical.ts`)。** キーを昇順に並べ、余分な空白を置かず、`undefined` を落とす。**ここでは並べ替えも Unicode 正規化も行わない** — 直列化器にとって配列はすべて順序付きであり、入力を書き換える直列化器は入力の忠実な写像でなくなる(RFC 8785 が Unicode 正規化をアプリケーション側に委ねているのと同じ理由)。「その配列が集合かどうか」は意味の問題であって、書き方の問題ではない。
+
+#### どの配列が集合で、どれが順序付きか
+
+**集合**(順序に意味は無い。正準順は下記):
+
+| 配列 | 正準順 |
+|---|---|
+| `action.requested_dimensions` | GAE ベクトル順 ⟨O,F,P,J,U,E,L⟩ |
+| `evidence_state.items` | `evidence_id` 昇順(UTF-16 コード単位) |
+| `evidence.freshness.reasons` | staleness 12分類の宣言順 |
+| `policy.scope.action_kinds` / `domains` | コード単位昇順 |
+| `policy.authority.non_human_may_hold` / `human_reserved` | GAE ベクトル順 |
+| `policy.evidence.accepted_modes` | コード単位昇順 |
+| `policy.freshness.tolerated_staleness_reasons` | staleness 12分類の宣言順 |
+| `decision.granted_dimensions` / `withheld_dimensions` | GAE ベクトル順 |
+| `decision.factors` | factor enum 順(6種を必ず全て含む) |
+| `factor.evidence_ids` | `evidence_id` 昇順 |
+| `routing.required_evidence_modes` | コード単位昇順 |
+| `attribution.changed_components` | enum 宣言順 |
+
+**順序付き**(順序それ自体がデータ):
+
+| 配列 | 意味 |
+|---|---|
+| `action.applicability.reasons` | ホストが述べた理由の叙述順 |
+| `factor.reasons` | カーネルが検出した順。並べ替えは根拠の提示順を変える |
+
+policy は digest の入力ではないが、集合として扱う配列は同じ規律に従う(`policy_id` + `version` の下で内容が同じなら、順序違いは同じ policy である)。
+
+`decide()` 自身も正規化後の request を見る。したがって集合の順序だけが違う2つの request は、digest が一致するだけでなく **decision がフィールド単位で一致する**。
+
 ## 6. 出力に対する禁止事項
 
 - `incomplete` を `human_required` として集計しない
