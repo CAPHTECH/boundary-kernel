@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://caph.tech/schemas/rbk.decision.v2.schema.json",
-  "title": "Review Boundary Decision v2",
-  "description": "境界計算の出力。routing(三値の outcome)と measurement(basis_complete)の二軸、それを導いた factor 別の根拠、および同一性(帰属のための digest 群)。v1 からの破壊的変更: basis_complete を decision と factorVerdict の双方に必須で追加した。v1 は routing と measurement を単一の値に畳んでおり、human_required と incomplete が同時に立つ状態を表現できなかった(設計 §3)。",
+  "$id": "https://caph.tech/schemas/rbk.decision.v3.schema.json",
+  "title": "Review Boundary Decision v3",
+  "description": "境界計算の出力。routing(三値の outcome)と measurement(basis_complete)の二軸、それを導いた factor 別の根拠、および同一性(帰属のための digest 群)。v2 からの破壊的変更: identity.policy_digest を必須で追加し、decision_id が policy を content hash で縛るようにした(設計 §5)。v2 は policy をラベルでしか縛っておらず、同じ (policy_id, version) のまま書き換えられた policy を検出できなかった。v1 からの破壊的変更だった basis_complete(decision と factorVerdict の双方に必須)は v2 のまま引き継ぐ — v1 は routing と measurement を単一の値に畳んでおり、human_required と incomplete が同時に立つ状態を表現できなかった(設計 §3)。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,7 @@
     "computed_at"
   ],
   "properties": {
-    "schema": { "const": "rbk.decision.v2" },
+    "schema": { "const": "rbk.decision.v3" },
 
     "decision_id": {
       "description": "hash(action_digest, evidence_state_digest, policy_digest, policy_id, policy_version, decision_schema, kernel_version)。policy を content hash で含むため、同じ (policy_id, version) のまま内容を書き換えても別の decision_id になる。schema 識別子とカーネル版も含む — 同じ入力でも v1 と v2 の decision は意味が違い、カーネルの版が違えば境界も違いうるため、同じ id を持ってはならない。",

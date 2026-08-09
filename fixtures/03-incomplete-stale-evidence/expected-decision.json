@@ -1,5 +1,5 @@
 {
-  "schema": "rbk.decision.v2",
+  "schema": "rbk.decision.v3",
   "decision_id": "sha256:510e464fa5ee00b438ceda69e4f06f295e0e4a9876c5a306d74d43c812d22018",
   "request_id": "req-03-incomplete-stale-evidence",
   "policy_id": "rag-config-change-default",

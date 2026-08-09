@@ -1,6 +1,7 @@
 /**
  * Types derived from schemas/rbk.policy.v1, rbk.request.v1 and
- * rbk.decision.v2 (the decision schema was broken to v2 in kernel v0.2).
+ * rbk.decision.v3 (the decision schema was broken to v2 in kernel v0.2 and
+ * again to v3 in kernel v0.3).
  *
  * Every union below mirrors the corresponding schema `enum` exactly. If a
  * schema enum changes, this file is the single place that must change with it.
@@ -231,16 +232,17 @@ export interface Request {
 }
 
 // ---------------------------------------------------------------------------
-// rbk.decision.v2
+// rbk.decision.v3
 // ---------------------------------------------------------------------------
 
 /**
  * The decision schema this kernel emits. Part of `decision_id`'s pre-image:
- * v1 and v2 decisions differ in structure *and* in meaning (v1 folded routing
- * and measurement into one value), so the same inputs under the two schemas
- * are not the same decision and must not share an identity.
+ * the versions differ in structure *and* in meaning — v1 folded routing and
+ * measurement into one value, v2 bound the policy by label only — so the same
+ * inputs under two schemas are not the same decision and must not share an
+ * identity.
  */
-export const DECISION_SCHEMA = 'rbk.decision.v2' as const;
+export const DECISION_SCHEMA = 'rbk.decision.v3' as const;
 
 export type Outcome = 'auto_apply' | 'human_required' | 'incomplete';
 
@@ -324,7 +326,7 @@ export interface Routing {
 }
 
 export interface Decision {
-  schema: 'rbk.decision.v2';
+  schema: 'rbk.decision.v3';
   decision_id: Hash;
   request_id: Identifier;
   policy_id: Identifier;

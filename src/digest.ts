@@ -91,7 +91,7 @@ export interface DecisionIdInput {
   policy_digest: Hash;
   policy_id: Identifier;
   policy_version?: Semver;
-  /** The decision schema the identity belongs to, e.g. `rbk.decision.v2`. */
+  /** The decision schema the identity belongs to, e.g. `rbk.decision.v3`. */
   decision_schema: string;
   /** The kernel that computed the decision, not a label the host chose. */
   kernel_version: Semver;
@@ -102,10 +102,10 @@ export interface DecisionIdInput {
  * `decide.ts` so the two can never drift apart.
  *
  * `decision_schema` and `kernel_version` are in the pre-image because the
- * identity names a computation, not just its inputs: a v1 and a v2 decision
- * over identical inputs mean different things, and two kernel versions may
- * compute different boundaries from the same request. Without them the two
- * would collide under one id.
+ * identity names a computation, not just its inputs: decisions under two
+ * schema versions over identical inputs mean different things, and two kernel
+ * versions may compute different boundaries from the same request. Without
+ * them the two would collide under one id.
  */
 export function decisionIdPreimage(input: DecisionIdInput): string {
   return canonicalJson({

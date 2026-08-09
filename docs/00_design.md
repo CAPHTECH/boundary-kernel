@@ -120,7 +120,7 @@ decision_id           = hash(action_digest, evidence_state_digest,
                              decision_schema, kernel_version)
 ```
 
-`decision_id` は**入力だけでなく計算そのもの**を同定する。同じ入力でも、v1 の decision と v2 の decision は意味が違う(v1 は routing と measurement を1つの値に畳んでいた)し、カーネルの版が違えば同じ request から違う境界を引きうる。したがって `decision_schema`(`rbk.decision.v2`)と `kernel_version` も digest の入力である。含めなければ、構造も意味論も違う2つの decision が同じ id を持つ。
+`decision_id` は**入力だけでなく計算そのもの**を同定する。同じ入力でも、schema の版が違えば decision の意味が違う(v1 は routing と measurement を1つの値に畳んでいた。v2 は policy をラベルでしか縛っていなかった)し、カーネルの版が違えば同じ request から違う境界を引きうる。したがって `decision_schema`(`rbk.decision.v3`)と `kernel_version` も digest の入力である。含めなければ、構造も意味論も違う2つの decision が同じ id を持つ。
 
 ここで束ねるのは**実際に計算したカーネルの版**(`KERNEL_VERSION`)であって、`decide()` のオプションでホストが差し替えられる表示用のラベルではない。後者を束ねると、同一の計算に対してホストが好きなだけ別の id を作れてしまう。
 
@@ -214,12 +214,20 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 |---|---|
 | `schemas/rbk.policy.v1.schema.json` | 境界の上限(ceiling)・閾値・権限地図 |
 | `schemas/rbk.request.v1.schema.json` | 行為 + 証拠状態(計算の入力) |
-| `schemas/rbk.decision.v2.schema.json` | routing(三値)+ measurement(`basis_complete`)+ factor 別の根拠 + 同一性 |
+| `schemas/rbk.decision.v3.schema.json` | routing(三値)+ measurement(`basis_complete`)+ factor 別の根拠 + 同一性 |
 
 **契約は自分の主張を強制する。** `factors` の「6種を1回ずつ、必ず全て」は v0.2 では `description` に書いてあるだけで、重複も7件目も検証を通っていた。強制していない主張は契約ではないので、`minItems`/`maxItems` と factor 種別ごとの `contains`(`minContains`/`maxContains`)で表現し直した。`uniqueItems` は object 全体の比較なので、同じ factor 種別が別の verdict で2度現れる場合を弾けない — ここでは使えない。`validate.py` は、スキーマが拒否すべきインスタンス(重複・7件目・欠落)を実際に投げて拒否を確認する。
 
 配列の**正準順**(factor enum 順など)はスキーマの妥当性条件にしていない。集合の順序は情報を持たないので、順序違いを無効にするのは誤りである。正準順は digest を取る際の規範であり、`normalize.ts` が担う。
 
 `rbk.decision.v1` は撤回した。v1 は routing と measurement を単一の値に畳んでおり、§3 の訂正を表現できない。`basis_complete` を任意フィールドにすれば互換は保てたが、読み手が「無い = 完全」と解釈できてしまい、欠損を見えなくするという同じ失敗を再生産する。したがって必須フィールドとし、破壊的変更として v2 を切った。`rbk.policy.v1` / `rbk.request.v1` は変更していない。
+
+### なぜ v3 を切ったか — 自分の規律を自分に適用する
+
+`identity.policy_digest` を必須にした変更(§5)は、当初 `rbk.decision.v2` のまま入れようとしていた。v2 は既に `https://caph.tech/schemas/rbk.decision.v2.schema.json` で配信済みである。**公開済みの識別子のまま内容を破壊的に変えることは、「同じ `(id, version)` で内容が違う」状態そのものであり、本カーネルが policy について「検出できない危険な状態だ」と警告している当のものである。** 自分の契約に対してそれをやれば、v2 を取得済みの読み手は、自分の持つ定義が現在の定義と違うことを知る手段を持たない — ラベルは同じなのだから。
+
+したがって `rbk.decision.v3` を切った。規律は policy に課しているものと同一である: **実質的な変更には新しい版を与え、既に配られた版はそのまま残す。** caph.tech 上の v2 は古い定義として正しいまま置き、このリポジトリは v3 のみを持つ(2つの定義を1つの識別子に重ねないため、v2 のファイルは復元しない)。`decision_schema` が `decision_id` の入力に入っているので、v2 の decision と v3 の decision は id の上でも別物である。
+
+自分の製品原則が自分に適用されたときに面倒でも守れるか、が原則が本物かどうかの試験になる。ここではその記録として残す。
 
 実装は言語非依存(Rust の reviewgraphen、TypeScript の Assay Kit / Cloudflare OS Gadget の双方から使う)。共有するのは**コードではなく契約と語彙**である。

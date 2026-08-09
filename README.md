@@ -6,7 +6,7 @@ AI が提案した行為について、**一つの問いだけ**を扱う契約�
 
 答えは決定論的に計算されます。行き先は三値、それとは別に「その判定を支える証拠基盤が十分だったか」が一つの真偽値で返ります。同じ入力なら常に同じ答えが出て、なぜそう判定したかの理由が必ず添えられます。
 
-> **ステータス: 実験的 (v0.3.0)。** スキーマはまだ固定していません。本番運用を前提にした保証はありません。v0.2 で `rbk.decision` に破壊的変更が入り(下記)、v0.3 で同一性に `identity.policy_digest` が必須フィールドとして加わっています(これも破壊的変更です)。
+> **ステータス: 実験的 (v0.3.0)。** スキーマはまだ固定していません。本番運用を前提にした保証はありません。v0.2 で `rbk.decision` に破壊的変更が入り(下記)、v0.3 で同一性に `identity.policy_digest` が必須になりました。後者も破壊的変更なので、**スキーマは `rbk.decision.v3` として切り直しています** — 公開済みの識別子のまま内容を変えるのは、このカーネルが policy について警告している「同じラベルで内容が違う」状態そのものだからです([理由](docs/00_design.md#なぜ-v3-を切ったか--自分の規律を自分に適用する))。
 
 ## 二軸 — routing と measurement
 
@@ -81,7 +81,7 @@ node --experimental-strip-types experiments/herdr-approvals/run.ts
 | ディレクトリ | 内容 |
 |---|---|
 | `docs/00_design.md` | 設計正本。三値の非対称性と routing / measurement の二軸、factor の由来、同一性と帰属の規律。 |
-| `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v2`(JSON Schema Draft 2020-12)。 |
+| `schemas/` | 契約そのもの。`rbk.policy.v1` / `rbk.request.v1` / `rbk.decision.v3`(JSON Schema Draft 2020-12)。 |
 | `fixtures/` | 5シナリオ。`auto_apply` / 権限の留保 / 証拠の陳腐化による `incomplete` / リスク超過による `human_required` / **`human_required` と基盤欠損の同時成立**。各 `policy.json` + `request.json` + `expected-decision.json`。 |
 | `src/` | TypeScript 参照実装。ランタイム依存ゼロ。`decide()` は**同期の純関数**で、digest は引数で受け取るため crypto に依存しません。 |
 | `test/` | fixtures との一致、routing 規則の網羅(3⁶ 全組み合わせ)、二軸の不変条件、境界条件(閾値ちょうど・欠損値・空配列)、同一性の束縛(policy を content hash で縛ること)、digest の決定論性と集合の順序非依存、変化の帰属。 |

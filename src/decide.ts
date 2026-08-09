@@ -111,9 +111,10 @@ export function decide(
   const policy_digest = `sha256:${sha256Utf8(policyDigestPreimage(policy))}`;
 
   // The schema and the kernel version identify the *computation*; the digests
-  // identify its inputs. Both are needed: a v1 and a v2 decision over identical
-  // inputs are different decisions (v1 folded routing into measurement), and a
-  // later kernel may draw a different boundary from the same request. Note
+  // identify its inputs. Both are needed: decisions under two schema versions
+  // over identical inputs are different decisions (v1 folded routing into
+  // measurement; v2 bound the policy by label only), and a later kernel may
+  // draw a different boundary from the same request. Note
   // that this is KERNEL_VERSION, the kernel that actually ran — not
   // `options.kernel_version`, which only relabels the emitted field and must
   // not let a host mint distinct identities for one computation.

@@ -286,20 +286,21 @@ describe('decision_id', () => {
         policy_digest: 'sha256:cc',
         policy_id: 'p',
         policy_version: '1.0.0',
-        decision_schema: 'rbk.decision.v2',
+        decision_schema: 'rbk.decision.v3',
         kernel_version: '0.3.0',
       }),
-      '{"action_digest":"sha256:aa","decision_schema":"rbk.decision.v2",' +
+      '{"action_digest":"sha256:aa","decision_schema":"rbk.decision.v3",' +
         '"evidence_state_digest":"sha256:bb","kernel_version":"0.3.0",' +
         '"policy_digest":"sha256:cc","policy_id":"p","policy_version":"1.0.0"}',
     );
   });
 
   /**
-   * A v1 and a v2 decision over identical inputs are different decisions —
-   * v1 folded routing and measurement into one value — and two kernel
-   * versions may draw different boundaries from the same request. Neither was
-   * in the pre-image before v0.3, so both collided under one id.
+   * Decisions under two schema versions over identical inputs are different
+   * decisions — v1 folded routing and measurement into one value, v2 bound
+   * the policy by label only — and two kernel versions may draw different
+   * boundaries from the same request. Neither was in the pre-image before
+   * v0.3, so both collided under one id.
    */
   it('the schema identifier and the kernel version separate otherwise identical ids', async () => {
     const policy = basePolicy();
@@ -310,13 +311,13 @@ describe('decision_id', () => {
       policy_id: policy.policy_id,
       policy_version: policy.version,
     };
+    const v3 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v3', kernel_version: '0.3.0' });
     const v2 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: '0.3.0' });
-    const v1 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v1', kernel_version: '0.3.0' });
-    const older = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: '0.2.0' });
-    notStrictEqual(v2, v1);
+    const older = await decisionId({ ...shared, decision_schema: 'rbk.decision.v3', kernel_version: '0.2.0' });
+    notStrictEqual(v3, v2);
+    notStrictEqual(v3, older);
     notStrictEqual(v2, older);
-    notStrictEqual(v1, older);
-    strictEqual(decide(policy, baseRequest(), DIGESTS, { computed_at: AT }).decision_id, v2);
+    strictEqual(decide(policy, baseRequest(), DIGESTS, { computed_at: AT }).decision_id, v3);
   });
 
   it('a policy rewritten behind an unchanged label moves the id', () => {

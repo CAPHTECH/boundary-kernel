@@ -51,7 +51,7 @@ FIXTURES_DIR = ROOT / "fixtures"
 SCHEMA_FILES = {
     "policy": SCHEMAS_DIR / "rbk.policy.v1.schema.json",
     "request": SCHEMAS_DIR / "rbk.request.v1.schema.json",
-    "expected-decision": SCHEMAS_DIR / "rbk.decision.v2.schema.json",
+    "expected-decision": SCHEMAS_DIR / "rbk.decision.v3.schema.json",
 }
 
 ALL_FACTORS = {
