@@ -110,6 +110,35 @@
     "kernel_version": { "$ref": "#/$defs/semver" }
   },
 
+  "allOf": [
+    {
+      "$comment": "incomplete は「次に何を観測すべきか」を必ず返す。返せないなら incomplete と名乗れない。",
+      "if": {
+        "required": ["outcome"],
+        "properties": { "outcome": { "const": "incomplete" } }
+      },
+      "then": {
+        "required": ["routing"],
+        "properties": {
+          "routing": {
+            "required": ["required_evidence_modes"],
+            "properties": { "required_evidence_modes": { "minItems": 1 } }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "auto_apply なら保留された次元は存在しない(単調な狭まりの帰結)。",
+      "if": {
+        "required": ["outcome"],
+        "properties": { "outcome": { "const": "auto_apply" } }
+      },
+      "then": {
+        "properties": { "withheld_dimensions": { "maxItems": 0 } }
+      }
+    }
+  ],
+
   "$defs": {
     "identifier": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._:-]*$" },
     "nonEmptyString": { "type": "string", "minLength": 1 },
@@ -141,7 +170,19 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/identifier" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "$comment": "理由のない制限を出力してはならない(設計 §4)。satisfied 以外は reasons が必須。",
+          "if": {
+            "required": ["verdict"],
+            "properties": { "verdict": { "not": { "const": "satisfied" } } }
+          },
+          "then": {
+            "properties": { "reasons": { "minItems": 1 } }
+          }
+        }
+      ]
     }
   }
 }

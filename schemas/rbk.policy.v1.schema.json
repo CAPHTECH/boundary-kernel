@@ -64,7 +64,19 @@
           "description": "U(授権)を非人間へ委譲する場合に必須。責任の所在を明示しない委譲を防ぐ。",
           "$ref": "#/$defs/nonEmptyString"
         }
-      }
+      },
+      "allOf": [
+        {
+          "$comment": "授権の委譲は責任洗浄に直結するため、理由なしには宣言できない。",
+          "if": {
+            "required": ["non_human_may_hold"],
+            "properties": {
+              "non_human_may_hold": { "contains": { "const": "authorize" } }
+            }
+          },
+          "then": { "required": ["authorize_delegation_rationale"] }
+        }
+      ]
     },
 
     "evidence": {
