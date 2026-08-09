@@ -39,7 +39,7 @@
     },
 
     "withheld_dimensions": {
-      "description": "要求されたが認められなかった次元。空でない場合、outcome は auto_apply にならない。",
+      "description": "要求されたが認められなかった次元 = requested − granted。authority 以外の factor が閉じた場合も、認められた次元は無いのでここに全要求次元が入る。空でない場合、outcome は auto_apply にならない。",
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/agencyDimension" }
@@ -102,7 +102,10 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/nonEmptyString" }
         },
-        "escalate_to": { "type": "string" }
+        "escalate_to": {
+          "description": "エスカレーション先。カーネルはこれを導出しない(policy にも request にも先を決める情報が無い)。ホストが自身の組織構造に基づいて後から埋めるフィールドである。",
+          "type": "string"
+        }
       }
     },
 

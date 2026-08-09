@@ -25,11 +25,7 @@ import { comparable, FIXTURE_NAMES, loadFixture } from './helpers.ts';
  * that correcting the fixture makes the test fail loudly instead of silently
  * passing.
  */
-const KNOWN_DIVERGENCES: Record<string, { factor: string; expected: string; computed: string }[]> = {
-  '02-authority-withheld': [
-    { factor: 'reversibility', expected: 'satisfied', computed: 'human_required' },
-  ],
-};
+const KNOWN_DIVERGENCES: Record<string, { factor: string; expected: string; computed: string }[]> = {};
 
 function run(name: string): { got: Decision; expected: Decision } {
   const fixture = loadFixture(name);
