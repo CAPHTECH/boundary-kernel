@@ -80,7 +80,7 @@ factor 内でも同じ。1つの factor が `human_required` と `incomplete` �
 
 基盤の欠損は**行き先を示せなければ記録した意味がない**。`basis_complete == false` の decision は、outcome が `human_required` であっても `routing.required_evidence_modes` を必ず伴う。
 
-⚠️ **この「行き先を示す」という設計意図は、v3 では達成されていない。**`required_evidence_modes` が実際に返すのは受理されうる mode の一覧であって、「次に何を観測すべきか」ではない。理由と、直さないと決めた経緯は [§7 v3 の限界](#v3-の限界--routingrequired_evidence_modes-は必要な-mode-を表現できない2026-08-15-確定直さない)。
+⚠️ **この「行き先を示す」という設計意図は、v3 では達成されていない。**`required_evidence_modes` が実際に返すのは受理されうる mode の一覧であって、「次に何を観測すべきか」ではない。理由と、直さないと決めた経緯は §7 の「v3 の限界」。
 
 権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
 
