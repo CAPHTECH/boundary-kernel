@@ -78,7 +78,9 @@ measurement:
 
 factor 内でも同じ。1つの factor が `human_required` と `incomplete` の両方の理由を持つとき、verdict は `human_required` だが、**その factor が incomplete 信号を出したことを別に残す**(理由テキストに埋めない)。
 
-基盤の欠損は**行き先を示せなければ記録した意味がない**。`basis_complete == false` の decision は、outcome が `human_required` であっても `routing.required_evidence_modes`(次に何を観測すべきか)を必ず伴う。
+基盤の欠損は**行き先を示せなければ記録した意味がない**。`basis_complete == false` の decision は、outcome が `human_required` であっても `routing.required_evidence_modes` を必ず伴う。
+
+⚠️ **この「行き先を示す」という設計意図は、v3 では達成されていない。**`required_evidence_modes` が実際に返すのは受理されうる mode の一覧であって、「次に何を観測すべきか」ではない。理由と、直さないと決めた経緯は [§7 v3 の限界](#v3-の限界--routingrequired_evidence_modes-は必要な-mode-を表現できない2026-08-15-確定直さない)。
 
 権限は**狭まる方向にしか動かない**(AAM の Trust Ratchet と同型)。policy の ceiling から出発し、各 factor は緩めない。
 
@@ -229,5 +231,21 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 したがって `rbk.decision.v3` を切った。規律は policy に課しているものと同一である: **実質的な変更には新しい版を与え、既に配られた版はそのまま残す。** caph.tech 上の v2 は古い定義として正しいまま置き、このリポジトリは v3 のみを持つ(2つの定義を1つの識別子に重ねないため、v2 のファイルは復元しない)。`decision_schema` が `decision_id` の入力に入っているので、v2 の decision と v3 の decision は id の上でも別物である。
 
 自分の製品原則が自分に適用されたときに面倒でも守れるか、が原則が本物かどうかの試験になる。ここではその記録として残す。
+
+### v3 の限界 — `routing.required_evidence_modes` は「必要な mode」を表現できない(2026-08-15 確定。直さない)
+
+**この欄は、スキーマの `description` が主張する意味を持てない。**`schemas/rbk.decision.v3.schema.json` はこれを「基盤の欠損を解消するために必要な証拠の種別」「『次に何を観測すべきか』を必ず返す」と定義している。**実装が返しているのは `accepted_modes` 全体であり、「必要な mode」ではない。**
+
+まず起きたことを書く。この欄が accepted_modes を丸ごと再掲することは、読んだエージェントが2度誤読して発覚した。そこで「充足済みの mode を差し引いて残りだけを返す」修正を実装した(`decide()` を実際に呼んで実測)。**別系統モデルによる独立レビューがこれを3点で否定し、修正は取り下げた。**
+
+1. **差し引き後の出力が「必要」の主張として偽になる。** policy は distinct mode の数ではなく **qualifying item の件数**を数える。`minimum_count` が gap のとき、**既に充足している mode にもう1件足せば gap は閉じる**。したがって差し引きで残った mode は「これを観測しなければ埋まらない」ものではない。差し引く前は「候補の列挙」として無害だった出力が、差し引くことで**偽の必要性を主張する出力**に変わる。
+2. **evidence 以外が gap のとき、観測しても変わらない mode を名指しする。** 基盤の欠損を報告しうるのは `applicability` / `evidence` / `freshness` / `risk` / `reversibility` である(§4)。gap が `applicability`(capability_missing / unknown)・`risk`(未測定)・`reversibility`(unknown)に由来するとき、**どの evidence mode を観測しても gap は動かない**。それでも `basis_complete == false` は `minItems: 1` を課すので、欄を空にできない。**構造上、無関係な mode を必ず1つ以上名指しすることになる。**
+3. **絞り込まれた出力のほうが誤読しやすい。** accepted_modes 全体の再掲は「候補一覧」に見えるが、絞り込まれた短いリストは「これをやれば閉じる」に見える。**修正は誤読を1つ消して、より強く誤読される出力を作った。**
+
+**結論: この欄は v3 の枠内では意図した意味を持てない。**`minItems: 1` の制約と、件数で数える policy 意味論と、evidence 以外の gap の存在が同時に成り立つ限り、どう実装しても「必要な mode」にはならない。**したがって v3 は直さない。**
+
+**読み手が取るべき扱い**: `routing.required_evidence_modes` を「**この decision で受理されうる evidence mode の一覧**」として読む。**「これを観測すれば基盤の欠損が埋まる」とは読まない。**何が欠けているかは `factors` の各 verdict と理由を見ること — 欠損の所在はそこにあり、この欄には無い。
+
+**スキーマファイル自身の `description` は誤ったまま残してある。**`schemas/rbk.decision.v3.schema.json` は `https://caph.tech/schemas/rbk.decision.v3.schema.json` で配信済みで、ローカルの当該ファイルと公開物は SHA-256 が一致している(`3d39965e4b5d65dac0784a8b47fdbd394beb572c83dcc6ecc6b4c76fee59e907`)。**description だけでも書き換えれば「同じ `(id, version)` で内容が違う」状態を作る** — 直前の節で、自分がまさにそれを禁じたばかりである。訂正するなら v4 を切るのが筋であり、それは別の判断である(→ [RBK Concept の既知の穴](../../ct-biz/knowledge/products/boundary-kernel.md))。
 
 実装は言語非依存(Rust の reviewgraphen、TypeScript の Assay Kit / Cloudflare OS Gadget の双方から使う)。共有するのは**コードではなく契約と語彙**である。
