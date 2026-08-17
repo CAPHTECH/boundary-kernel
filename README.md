@@ -36,8 +36,6 @@ incomplete       判断できない(境界の計算に必要なものが欠け�
 
 > ⚠️ **`routing.required_evidence_modes` は「次に何を観測すべきか」を返しません。**スキーマの `description` はそう定義していますが、**v3 の実装が返すのは「受理されうる evidence mode の一覧」です。**policy は mode の種類数ではなく証拠の**件数**を数えるため、そこに挙がった mode を観測しても欠損が埋まるとは限らず、逆に欠損が `applicability` / `risk` / `reversibility` に由来するときは、**どの mode を観測しても状況は変わりません**(それでもスキーマが `minItems: 1` を課すため、欄は空にできません)。**何が欠けているかは `factors` の verdict と理由を見てください。**充足済み mode を差し引く修正を実装しましたが、独立レビューが3点で否定したため取り下げ、**v3 は直さないことを 2026-08-15 に確定しました** — [`docs/00_design.md` §7 v3 の限界](docs/00_design.md#7-契約)。
 
-
-
 判定は6つの factor に分解されます: `applicability` / `authority` / `evidence` / `freshness` / `risk` / `reversibility`。各 factor は独立に verdict と `basis_complete` を返し、`satisfied` 以外には必ず理由が付きます。1つの factor が両方の信号を出したとき(例: 影響度が上限超過 **かつ** 不確実性が上限超過)、verdict は `human_required` ですが `basis_complete` は false のまま残ります。満たされなかった factor を出力から省くことはしません。
 
 ## 同一性 — 集合を順序で扱わない
