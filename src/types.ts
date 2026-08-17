@@ -130,9 +130,14 @@ export interface PolicyRisk {
   max_uncertainty?: number;
 }
 
+/** The floor a policy may set. `irreversible` is not among them (Rollback Fiction ban). */
+export type ReversibilityFloor = 'reversible' | 'compensatable';
+
+export const REVERSIBILITY_FLOORS: readonly ReversibilityFloor[] = ['reversible', 'compensatable'];
+
 export interface PolicyReversibility {
   /** `irreversible` can never be permitted (Rollback Fiction ban). */
-  minimum: 'reversible' | 'compensatable';
+  minimum: ReversibilityFloor;
 }
 
 export interface Policy {
@@ -154,6 +159,8 @@ export interface Policy {
 
 export type ActorKind = 'human' | 'ai_agent' | 'deterministic' | 'unknown';
 
+export const ACTOR_KINDS: readonly ActorKind[] = ['human', 'ai_agent', 'deterministic', 'unknown'];
+
 export interface ProposedBy {
   actor_id: string;
   actor_kind: ActorKind;
@@ -161,6 +168,13 @@ export interface ProposedBy {
 }
 
 export type ActionReversibility = 'reversible' | 'compensatable' | 'irreversible' | 'unknown';
+
+export const ACTION_REVERSIBILITIES: readonly ActionReversibility[] = [
+  'reversible',
+  'compensatable',
+  'irreversible',
+  'unknown',
+];
 
 export interface ActionRisk {
   impact: Severity;
@@ -171,6 +185,13 @@ export interface ActionRisk {
 }
 
 export type ApplicabilityStatus = 'applicable' | 'not_applicable' | 'capability_missing' | 'unknown';
+
+export const APPLICABILITY_STATUSES: readonly ApplicabilityStatus[] = [
+  'applicable',
+  'not_applicable',
+  'capability_missing',
+  'unknown',
+];
 
 export interface ActionApplicability {
   status: ApplicabilityStatus;
@@ -192,6 +213,8 @@ export interface Action {
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'unknown';
 
+export const FRESHNESS_STATUSES: readonly FreshnessStatus[] = ['fresh', 'stale', 'unknown'];
+
 export interface EvidenceFreshness {
   status: FreshnessStatus;
   /** `status=stale` with empty reasons is treated as "reason unknown". */
@@ -200,6 +223,8 @@ export interface EvidenceFreshness {
 }
 
 export type EvidenceOutcome = 'passed' | 'failed' | 'inconclusive';
+
+export const EVIDENCE_OUTCOMES: readonly EvidenceOutcome[] = ['passed', 'failed', 'inconclusive'];
 
 export interface EvidenceItem {
   evidence_id: Identifier;

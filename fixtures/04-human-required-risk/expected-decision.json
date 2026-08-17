@@ -31,5 +31,5 @@
     "escalate_to": "human:eng-lead"
   },
   "computed_at": "2026-08-09T12:05:01Z",
-  "kernel_version": "0.3.0"
+  "kernel_version": "0.4.0"
 }

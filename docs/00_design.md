@@ -209,6 +209,36 @@ policy も `policy_digest` を通じて digest の入力である(v0.3)。集合
 - 満たされなかった factor を出力から省略しない(欠損は欠損として残す)
 - 確率・スコアを「証明」と表示しない(測候方法論 §3.4 保証境界: `evaluator_supported` を `proved` と表示してはならない)
 - policy 変更を evidence 変更として帰属しない
+- **読めなかった入力を `satisfied` として扱わない**(v0.3 までの誤り。下記)
+
+### 読めない入力は人間へ回す(v0.4 で訂正)
+
+**v0.3.0 まで、`decide()` は入力を実行時に検証していなかった。**`Policy` と `Request` は TypeScript の型としてのみ受け取られており、型は検査ではない。順序比較は `indexOf` で書かれている:
+
+```ts
+const severityRank = (level: Severity): number => SEVERITY_ORDER.indexOf(level);  // enum 外は -1
+if (severityRank(risk.impact) > severityRank(policy.risk.max_impact)) { ... }
+```
+
+`max_impact: "high"` に対して enum 外の `impact` は `-1 > 3` となり**偽**。verdict も理由も積まれず、factor は `satisfied` に解決し、decision は **`auto_apply` / `basis_complete: true` / `reasons: []`** に合成された。**大文字小文字の違いで足りた** — `"critical"` は `human_required`、`"CRITICAL"` は `auto_apply`。同型の箇所が8つあった(`action.risk.impact` / `action.applicability.status` / evidence item の `freshness.status` と `outcome` / `action.risk.exposure` / `action.risk.uncertainty` / `policy.reversibility.minimum` / `policy.evidence.minimum_assurance`)。`action.reversibility` は `switch` から落ちて `undefined` を返し、例外になっていた。
+
+**倒れる向きが逆だった。**このカーネルは「人間を通さず適用してよいか」を決めるために存在する。読めなかった入力に対する正しい答えは**人間へ回すこと**であって、通すことではない。v0.4 は定義域外の値を、それを読む factor の次の状態に変える。
+
+```
+verdict:        human_required   routing —— 人間が見る必要がある
+basis_complete: false            measurement —— 我々の基盤は欠けていた
+reasons:        非空             フィールド・届いた値・期待される定義域を名指しする
+```
+
+**両軸を同時に立てるのは、両方が同時に真だからである** —— §3 で分けた独立性そのものである。
+
+**`incomplete` にはしない。**`incomplete` の救済手段は追加観測であり(`evaluateRisk` が `max_uncertainty` にこれを使うのはそのためである)、enum 外の値はいくら観測し直しても直らない。`incomplete` へ回すと、ホストには「証拠を足して再提出せよ」と伝わる。`"CRITICAL"` を決定論的に吐くホストはそこで無限に回り続け、**直せる人間には永久に到達しない。**
+
+**検証の定義域は `types.ts` の `readonly` 配列から導出する**(ここで書き直さない)。enum にメンバーを足したときに検証側だけが取り残されるのを防ぐためで、`types.ts` が既に「スキーマの enum が変わったときに変更する唯一の場所」を自認していることに依存している。
+
+**欠陥は2種に分ける。**正規化も digest もできない**形状**の欠陥(`items` が配列でない等)は例外を投げる —— `identity.policy_digest` は decision の同一性の一部であり、それを計算できない以上、返せる `rbk.decision.v3` が存在しない。canonicalize はできるが値が定義域の外にある**定義域**の欠陥は、上記の `human_required` になる。
+
+**公開スキーマは切り直していない。**enum はもともと `rbk.request.v1` / `rbk.policy.v1` に宣言されていた。v0.4 で通らなくなる入力は**元からスキーマ違反**であり、契約は動いていない。カーネルが自分の公開契約を執行していなかっただけである。破壊的なのはホストに対してであり(これまで `auto_apply` を受け取っていた入力が `human_required` を返す)、そのためカーネルの版を上げた。`KERNEL_VERSION` は `decision_id` の pre-image に入るので、**同じ request でも v0.3.0 とは異なる `decision_id` になる** —— §5 が「後のカーネルは同じ request から別の境界を引きうる」と書いた、まさにその状況である。
 
 ## 7. 契約
 
