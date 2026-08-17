@@ -12,6 +12,7 @@
 
 export { decide, compose, composeBasis, KERNEL_VERSION, type DecideOptions } from './decide.ts';
 export { attribute } from './attribute.ts';
+export { validateInputs, RbkInvalidInputError, type InputDefect } from './validate.ts';
 export {
   digest,
   actionDigest,

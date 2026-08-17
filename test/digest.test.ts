@@ -311,8 +311,11 @@ describe('decision_id', () => {
       policy_id: policy.policy_id,
       policy_version: policy.version,
     };
-    const v3 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v3', kernel_version: '0.3.0' });
-    const v2 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: '0.3.0' });
+    // The kernel that actually runs, not a literal copy of it: this row has to
+    // match what `decide()` emits, so pinning the version here would only assert
+    // that someone remembered to edit the test after a version bump.
+    const v3 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v3', kernel_version: KERNEL_VERSION });
+    const v2 = await decisionId({ ...shared, decision_schema: 'rbk.decision.v2', kernel_version: KERNEL_VERSION });
     const older = await decisionId({ ...shared, decision_schema: 'rbk.decision.v3', kernel_version: '0.2.0' });
     notStrictEqual(v3, v2);
     notStrictEqual(v3, older);

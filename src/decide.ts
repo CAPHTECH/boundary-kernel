@@ -46,12 +46,14 @@ import {
   type Policy,
   type Request,
   type RequestDigests,
+  type FactorKind,
   type Semver,
   type Severity,
   type Verdict,
 } from './types.ts';
+import { validateInputs, type InputDefect } from './validate.ts';
 
-export const KERNEL_VERSION: Semver = '0.3.0';
+export const KERNEL_VERSION: Semver = '0.4.0';
 
 export interface DecideOptions {
   /**
@@ -68,6 +70,14 @@ export function decide(
   digests: RequestDigests,
   options: DecideOptions = {},
 ): Decision {
+  // Before anything is normalized or compared: every value this function is
+  // about to branch on has to be inside the domain its schema declares. A value
+  // that is not cannot be placed relative to the policy, and an input the kernel
+  // cannot read must never resolve to `auto_apply` — see `validate.ts`.
+  // Unreadable *shape* throws from here; out-of-domain values come back as
+  // defects and become `human_required` factors below.
+  const undecidable = defectsByFactor(validateInputs(policy, request));
+
   // Sets are judged in canonical order, so that two requests differing only in
   // the order of a set produce a byte-identical decision — not just an equal
   // digest (design §5, `normalize.ts`).
@@ -83,20 +93,29 @@ export function decide(
   // `evidence` and `freshness` factors judge exactly the same items.
   const qualifying = qualifyingEvidence(policy, normalized.evidence_state.items);
 
-  const applicability = evaluateApplicability(policy, normalized);
-  const authority = evaluateAuthority(policy, normalized);
-  const evidence = evaluateEvidence(policy, normalized, qualifying);
-  const freshness = evaluateFreshness(policy, normalized, qualifying);
-  const risk = evaluateRisk(policy, normalized);
-  const reversibility = evaluateReversibility(policy, normalized);
+  // A factor whose inputs did not survive validation is not evaluated: there is
+  // nothing to evaluate them against. It reports what it could not read instead.
+  const applicability =
+    undecidable.get('applicability') ?? evaluateApplicability(policy, normalized);
+  const authority =
+    undecidable.get('authority') ?? evaluateAuthority(policy, normalized).verdict_entry;
+  const evidence = undecidable.get('evidence') ?? evaluateEvidence(policy, normalized, qualifying);
+  const undecidableFreshness = undecidable.get('freshness');
+  const freshnessResult = undecidableFreshness
+    ? undefined
+    : evaluateFreshness(policy, normalized, qualifying);
+  const freshness = undecidableFreshness ?? freshnessResult!.verdict_entry;
+  const risk = undecidable.get('risk') ?? evaluateRisk(policy, normalized);
+  const reversibility =
+    undecidable.get('reversibility') ?? evaluateReversibility(policy, normalized);
 
   // Order is the schema's factor enum order; all six are always present, and
   // satisfied factors are never omitted (design §6).
   const factors: FactorVerdict[] = [
     applicability,
-    authority.verdict_entry,
+    authority,
     evidence,
-    freshness.verdict_entry,
+    freshness,
     risk,
     reversibility,
   ];
@@ -167,7 +186,11 @@ export function decide(
     // otherwise the gap is unactionable and we are back to v0.1's collapse
     // (decision schema allOf).
     decision.routing = {
-      required_evidence_modes: requiredEvidenceModes(policy, factors, freshness.unresolved_modes),
+      required_evidence_modes: requiredEvidenceModes(
+        policy,
+        factors,
+        freshnessResult?.unresolved_modes ?? [],
+      ),
     };
   }
 
@@ -177,6 +200,39 @@ export function decide(
 // ---------------------------------------------------------------------------
 // Composition
 // ---------------------------------------------------------------------------
+
+/**
+ * Turns the validator's defects into the factors that will stand in for the
+ * evaluations that could not run.
+ *
+ * `human_required` on the routing axis and `basis_complete: false` on the
+ * measurement axis, together — both are true at once, and the whole point of
+ * splitting the axes in v0.2 was that saying one must not erase the other. A
+ * person has to look at this (the kernel cannot place the action), *and* our
+ * evidential basis was short (we could not read the field). Every reason names
+ * the field, the value that arrived and the domain it had to be in, so the
+ * decision records why it could not be computed rather than leaving `reasons`
+ * empty — which is exactly how the defect this fixes stayed invisible.
+ */
+function defectsByFactor(defects: readonly InputDefect[]): Map<FactorKind, FactorVerdict> {
+  const reasons = new Map<FactorKind, string[]>();
+  for (const defect of defects) {
+    const existing = reasons.get(defect.factor);
+    if (existing) existing.push(defect.reason);
+    else reasons.set(defect.factor, [defect.reason]);
+  }
+
+  const factors = new Map<FactorKind, FactorVerdict>();
+  for (const [factor, factorReasons] of reasons) {
+    factors.set(factor, {
+      factor,
+      verdict: 'human_required',
+      basis_complete: false,
+      reasons: factorReasons,
+    });
+  }
+  return factors;
+}
 
 /** routing axis: human_required > incomplete > auto_apply (design §3). */
 export function compose(verdicts: readonly Verdict[]): Outcome {
@@ -601,6 +657,22 @@ function evaluateReversibility(policy: Policy, request: Request): FactorVerdict 
       return { factor: 'reversibility', verdict: 'satisfied', basis_complete: true, reasons: [] };
     case 'reversible':
       return { factor: 'reversibility', verdict: 'satisfied', basis_complete: true, reasons: [] };
+    default:
+      // Unreachable via `decide()`, which validates first. Kept so the function
+      // is total for any caller: without it a value outside the enum fell off
+      // the end and returned `undefined`, and the `undefined` then threw from
+      // the factor list — a decision that neither opened nor closed the
+      // boundary, just crashed.
+      return {
+        factor: 'reversibility',
+        verdict: 'human_required',
+        basis_complete: false,
+        reasons: [
+          `action.reversibility is ${JSON.stringify(actual)}, which is not one of ` +
+            `'reversible', 'compensatable', 'irreversible', 'unknown'; ` +
+            `reversibility cannot be judged and the action is not auto-applied`,
+        ],
+      };
   }
 }
 
