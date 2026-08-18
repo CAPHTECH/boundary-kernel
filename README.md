@@ -1,5 +1,15 @@
 # Review Boundary Kernel (RBK)
 
+> ## アーカイブ済み (2026-08-18)
+>
+> このリポジトリは 2026-08-18 に開発を止め、GitHub 上で archived にしました。以降の更新・Issue・PR の受付はありません。コードとスキーマはそのまま残します。
+>
+> 止めた理由。自社の切除実測で、RBK の `outcome` は入力を埋める主体が既に持っている判断の関数であることが立ちました。判断欄(`risk.impact` / `risk.exposure` / `risk.uncertainty` / `reversibility` / `requested_dimensions`)を落とすと判定が変わり、機械由来の入力だけで判定が保たれたのは `evidence.outcome` に由来する1件でした。つまりこのカーネルは、入力者が事前に持っている判断を三値へ写し替えているのであって、判定器として独立の価値を主張できません。測ったのは手元の11件(`experiments/herdr-approvals` の6件と同梱 fixtures の5件)で、同一セッション・同一人物に由来する母集団のため一般化はしません。この結果は「RBK に価値が無い」とは言っていません。倒れる形は具体的で、承認前に `risk` と `reversibility` を機械導出する層を作り、その導出が入力者の事前判断と独立に決まることを前向きに示せば倒れます。その試験は設計しましたが一度も走っていません。別系列モデルによる独立レビューは通していません。
+>
+> 使う場合は v0.4.0 (`220f37d`) を参照してください。0.1.0 から 0.3.0 には `decide()` が入力を実行時検証しないことに由来する fail-open が8箇所あり、enum の外にある値や型違いの値が理由欄の空いたまま `auto_apply` に合成されていました。0.4.0 で修正済みです。詳細は [Issue #1](https://github.com/CAPHTECH/boundary-kernel/issues/1)。公開スキーマ (`rbk.request.v1` / `rbk.policy.v1` / `rbk.decision.v3`) はこの修正で変更しておらず、`https://caph.tech/schemas/` から配信されたままです。スキーマだけを読んでも fail-open のことは分からないので、実装を使うなら 0.4.0 のコードを見てください。
+>
+> 既知の未修正問題。`fixtures/*/expected-decision.json` の `decision_id` は `decide()` が同じディレクトリの入力から計算する値と一致せず、v0.4.0 時点では5件すべてが不一致です(01〜04 は最初の TypeScript 実装 `1941ed4` 以来、05 は 0.4.0 の版上げ以降)。`test/helpers.ts` の `comparable()` がこのフィールドを比較から外しているため、テストは通ります。fixtures を同一性のオラクルとして使うと、正しい実装が誤りと判定されます。factor と outcome の照合には使えます。
+
 AI が提案した行為について、**一つの問いだけ**を扱う契約層です。
 
 > **この行為を、人間を通さずに適用してよいか。**
